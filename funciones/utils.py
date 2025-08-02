@@ -12,10 +12,10 @@ from sklearn.datasets import make_moons, make_circles
 def transform_and_get_iris():
     """
     Columna original	Nombre simulado	            Descripción de negocio
-    sepal length (cm)	mdeia_visitas_diarias	    Cantidad promedio de visitas diarias al producto (popularidad)
+    sepal length (cm)	media_visitas_diarias	    Cantidad promedio de visitas diarias al producto (popularidad)
     sepal width (cm)	precio_unitario	            Precio en USD del producto
     petal length (cm)	unidades_vendidas_mensual	Unidades vendidas por mes
-    petal width (cm)	valoracion_media	        Valoración media de usuarios (1 a 5)
+    petal width (cm)	valoracion_media	        Valoración media de usuarios (0 a )
 
     labels = Tipo de cliente que más compra ese producto
 
@@ -32,10 +32,10 @@ def transform_and_get_iris():
     ##cambio las columnas
     df = pd.DataFrame(iris.data, columns=
                       [
-                          "mdeia_visitas_diarias",
+                          "media_visitas_diarias",
                           "precio_unitario",
                           "unidades_vendidas_mensuales",
-                          "valoración_media"
+                          "valoracion_media"
                       ])
     df["segmento"] = iris.target
 
