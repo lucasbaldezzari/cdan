@@ -15,6 +15,8 @@ from sklearn.metrics.pairwise import rbf_kernel
 from sklearn.cluster import KMeans
 from sklearn.linear_model import LinearRegression
 
+import joblib
+
 
 def get_housingdata():
     try:
@@ -113,51 +115,58 @@ def ratio_pipeline():
         StandardScaler())
 
 def makeLinearRegressionPipeline(housing):
+
     housing["income_cat"] = pd.cut(housing["median_income"],
-                               bins=[0., 1.5, 3.0, 4.5, 6., np.inf],
-                               labels=[1, 2, 3, 4, 5])
-    housing_num = housing.select_dtypes(include=[np.number])
+                                bins=[0., 1.5, 3.0, 4.5, 6., np.inf],
+                                labels=[1, 2, 3, 4, 5])
 
-    num_pipeline = Pipeline([
-        ("impute", SimpleImputer(strategy="median")),
-        ("standardize", StandardScaler()),
-    ])
+    ##intento cargar el modelo ya entrenado
+    try:
+        lin_reg = joblib.load('cdan/modelos/regresor_california_housing.pkl')
+        print("Modelo cargado exitosamente.")
+        
+    except:
+        print("No se encontró el modelo, se genera uno nuevo.")
+        num_pipeline = Pipeline([
+            ("impute", SimpleImputer(strategy="median")),
+            ("standardize", StandardScaler()),
+        ])
 
-    num_attribs = ["longitude", "latitude", "housing_median_age", "total_rooms",
-               "total_bedrooms", "population", "households", "median_income"]
-    cat_attribs = ["ocean_proximity"]
+        num_attribs = ["longitude", "latitude", "housing_median_age", "total_rooms",
+                "total_bedrooms", "population", "households", "median_income"]
+        cat_attribs = ["ocean_proximity"]
 
-    cat_pipeline = make_pipeline(
-        SimpleImputer(strategy="most_frequent"),
-        OneHotEncoder(handle_unknown="ignore"))
+        cat_pipeline = make_pipeline(
+            SimpleImputer(strategy="most_frequent"),
+            OneHotEncoder(handle_unknown="ignore"))
 
-    preprocessing = ColumnTransformer([
-        ("num", num_pipeline, num_attribs),
-        ("cat", cat_pipeline, cat_attribs),
-    ])
+        preprocessing = ColumnTransformer([
+            ("num", num_pipeline, num_attribs),
+            ("cat", cat_pipeline, cat_attribs),
+        ])
 
-    preprocessing = make_column_transformer(
-    (num_pipeline, make_column_selector(dtype_include=np.number)),
-    (cat_pipeline, make_column_selector(dtype_include=object)),)
+        preprocessing = make_column_transformer(
+        (num_pipeline, make_column_selector(dtype_include=np.number)),
+        (cat_pipeline, make_column_selector(dtype_include=object)),)
 
-    log_pipeline = make_pipeline(
-    SimpleImputer(strategy="median"),
-    FunctionTransformer(np.log, feature_names_out="one-to-one"),
-    StandardScaler())
-    cluster_simil = ClusterSimilarity(n_clusters=10, gamma=1., random_state=42)
-    default_num_pipeline = make_pipeline(SimpleImputer(strategy="median"),
-                                        StandardScaler())
-    preprocessing = ColumnTransformer([
-            ("bedrooms", ratio_pipeline(), ["total_bedrooms", "total_rooms"]),
-            ("rooms_per_house", ratio_pipeline(), ["total_rooms", "households"]),
-            ("people_per_house", ratio_pipeline(), ["population", "households"]),
-            ("log", log_pipeline, ["total_bedrooms", "total_rooms", "population",
-                                "households", "median_income"]),
-            ("geo", cluster_simil, ["latitude", "longitude"]),
-            ("cat", cat_pipeline, make_column_selector(dtype_include=object)),
-        ],
-        remainder=default_num_pipeline)  # one column remaining: housing_median_age
-    
-    lin_reg = make_pipeline(preprocessing, LinearRegression())
+        log_pipeline = make_pipeline(
+        SimpleImputer(strategy="median"),
+        FunctionTransformer(np.log, feature_names_out="one-to-one"),
+        StandardScaler())
+        cluster_simil = ClusterSimilarity(n_clusters=10, gamma=1., random_state=42)
+        default_num_pipeline = make_pipeline(SimpleImputer(strategy="median"),
+                                            StandardScaler())
+        preprocessing = ColumnTransformer([
+                ("bedrooms", ratio_pipeline(), ["total_bedrooms", "total_rooms"]),
+                ("rooms_per_house", ratio_pipeline(), ["total_rooms", "households"]),
+                ("people_per_house", ratio_pipeline(), ["population", "households"]),
+                ("log", log_pipeline, ["total_bedrooms", "total_rooms", "population",
+                                    "households", "median_income"]),
+                ("geo", cluster_simil, ["latitude", "longitude"]),
+                ("cat", cat_pipeline, make_column_selector(dtype_include=object)),
+            ],
+            remainder=default_num_pipeline)  # one column remaining: housing_median_age
+        
+        lin_reg = make_pipeline(preprocessing, LinearRegression())
 
     return lin_reg
