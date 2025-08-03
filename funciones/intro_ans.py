@@ -38,8 +38,7 @@ def makeBetterScatterHousing(housing, figsize=(12, 6)):
                 legend=True, sharex=False, figsize=(10, 7))
     plt.title("Distribución de las casas en California", fontsize=12)
     try:
-
-        california_img = plt.imread("cdan\\imagenes\\california.png")
+        california_img = plt.imread("cdan/imagenes/california.png")
     except FileNotFoundError:
         california_img = plt.imread("imagenes\\california.png")
     axis = -124.55, -113.95, 32.45, 42.05
