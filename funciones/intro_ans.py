@@ -170,3 +170,36 @@ def makeLinearRegressionPipeline(housing):
         lin_reg = make_pipeline(preprocessing, LinearRegression())
 
     return lin_reg
+
+def makeScatterForFakeData(data, col1, col2, figsize=(12, 6), hue=None, palette="Set1"):
+    if hue is None:
+        palette = None
+
+    plt.figure(figsize=figsize)
+    sns.scatterplot(data=data, x=col1, y=col2, hue=hue, palette=palette, s=100, alpha=0.7)
+    plt.title(f"Distribución de productos según {col1} y {col2}")
+    plt.xlabel(col1)
+    plt.ylabel(col2)
+    plt.grid(True)
+    plt.show()
+
+def makeKmeansAndPlot(data, n_clusters=3, col1="media_visitas_diarias", col2="precio_unitario", centroides=False, figsize=(12, 6)):
+    if n_clusters < 1:
+        raise ValueError("El número de clusters debe ser al menos 1.")
+    if n_clusters > 10:
+        raise ValueError("No te recomiendo usar valores mayores a 10.")
+
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    data["cluster"] = kmeans.fit_predict(data[[col1, col2]])
+
+    plt.figure(figsize=figsize)
+    sns.scatterplot(data=data, x=col1, y=col2, hue="cluster", palette="Set1", s=100, alpha=0.7)
+    if centroides:
+        centroids = kmeans.cluster_centers_
+        plt.scatter(centroids[:, 0], centroids[:, 1], c='black', s=200, marker='X', label='Centroides')
+    plt.title(f"K-means Clustering (K={n_clusters})")
+    plt.xlabel(col1)
+    plt.ylabel(col2)
+    plt.grid(True)
+    plt.legend(title="Cluster")
+    plt.show()

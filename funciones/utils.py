@@ -15,7 +15,7 @@ def transform_and_get_iris():
     sepal length (cm)	media_visitas_diarias	    Cantidad promedio de visitas diarias al producto (popularidad)
     sepal width (cm)	precio_unitario	            Precio en USD del producto
     petal length (cm)	unidades_vendidas_mensual	Unidades vendidas por mes
-    petal width (cm)	valoracion_media	        Valoración media de usuarios (0 a )
+    petal width (cm)	valoracion_media	        Valoración media de usuarios (1 a 5)
 
     labels = Tipo de cliente que más compra ese producto
 
@@ -39,4 +39,8 @@ def transform_and_get_iris():
                       ])
     df["segmento"] = iris.target
 
+    ##pasamos la columna valoración media en un rango de 1 a 5
+    df["valoracion_media"] = (df["valoracion_media"] - df["valoracion_media"].min()) / \
+                              (df["valoracion_media"].max() - df["valoracion_media"].min())
+    df["valoracion_media"] = df["valoracion_media"] * 4 + 1
     return df
