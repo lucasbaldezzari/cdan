@@ -50,13 +50,13 @@ def makeBetterScatterHousing(housing, figsize=(12, 6)):
     housing_renamed = housing.rename(columns={
     "latitude": "Latitud", "longitude": "Longitud",
     "population": "Población",
-    "median_house_value": "Valor de la casa mediana (USD)"})
+    "median_house_value": "Valor medio de casas (USD)"})
     housing_renamed.plot(
                 kind="scatter", x="Longitud", y="Latitud",
                 s=housing_renamed["Población"] / 100, label="Población",
-                c="Valor de la casa mediana (USD)", cmap="jet", colorbar=True,
+                c="Valor medio de casas (USD)", cmap="jet", colorbar=True,
                 legend=True, sharex=False, figsize=figsize)
-    plt.title("Distribución de las casas en California", fontsize=12)
+    plt.title("Distribución de distritos en California", fontsize=12)
     try:
         california_img = plt.imread("cdan/imagenes/california.png")
     except FileNotFoundError:
