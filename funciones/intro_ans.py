@@ -14,6 +14,10 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics.pairwise import rbf_kernel
 from sklearn.cluster import KMeans
 from sklearn.linear_model import LinearRegression
+from sklearn.datasets import make_circles 
+from sklearn.cluster import DBSCAN
+from sklearn.datasets import make_blobs
+from sklearn.metrics import silhouette_score, davies_bouldin_score
 
 import joblib
 
@@ -202,4 +206,111 @@ def makeKmeansAndPlot(data, n_clusters=3, col1="media_visitas_diarias", col2="pr
     plt.ylabel(col2)
     plt.grid(True)
     plt.legend(title="Cluster")
+    plt.show()
+
+def showCirclesWithKmeans(n_samples=1000, noise=0.05, factor=0.5, random_state=42, figsize=(10, 5), centroides=False,
+                          n_clusters=2):
+    X, y = make_circles(n_samples=n_samples, noise=noise, factor=factor, random_state=random_state)
+    ##entreno kmeans con n=2
+    kmeans = KMeans(n_clusters=n_clusters, random_state=random_state)
+    kmeans.fit(X)
+
+    ##genero gráfico de dos columnas. En la primer columna muestro los originales, y en la segunda los datos pero pintados en base
+    #a las etiquetas de K-means
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+    axes[0].scatter(X[:, 0], X[:, 1], cmap='viridis', s=50, alpha=0.7)
+    axes[0].set_title("Datos Originales")   
+    axes[0].set_xlabel("Feature 1")
+    axes[0].set_ylabel("Feature 2")
+    axes[1].scatter(X[:, 0], X[:, 1], c=kmeans.labels_, cmap='viridis', s=50, alpha=0.7)
+    if centroides:
+        centroids = kmeans.cluster_centers_
+        axes[1].scatter(centroids[:, 0], centroids[:, 1], c='red', s=200, marker='X', label='Centroides')
+        axes[1].legend()
+    axes[1].set_title("K-means Clustering (K=2)")
+    axes[1].set_xlabel("Feature 1")
+    axes[1].set_ylabel("Feature 2")
+    plt.tight_layout()
+    plt.show()
+
+def showCirclesWithDBSCAN(n_samples=1000, noise=0.05, factor=0.5, random_state=42, figsize=(10, 5), eps=0.1, min_samples=5):
+    X, y = make_circles(n_samples=n_samples, noise=noise, factor=factor, random_state=random_state)
+    
+    # Entreno DBSCAN
+    dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+    labels = dbscan.fit_predict(X)
+
+    # Genero gráfico de dos columnas. En la primer columna muestro los originales, y en la segunda los datos pero pintados en base
+    # a las etiquetas de DBSCAN
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+    axes[0].scatter(X[:, 0], X[:, 1], cmap='viridis', s=50, alpha=0.7)
+    axes[0].set_title("Datos Originales")   
+    axes[0].set_xlabel("Feature 1")
+    axes[0].set_ylabel("Feature 2")
+    
+    axes[1].scatter(X[:, 0], X[:, 1], c=labels, cmap='viridis', s=50, alpha=0.7)
+    axes[1].set_title(f"DBSCAN Clustering (eps={eps}, min_samples={min_samples})")
+    axes[1].set_xlabel("Feature 1")
+    axes[1].set_ylabel("Feature 2")
+    
+    plt.tight_layout()
+    plt.show()
+
+
+def makeAndShowBlobs(n_samples=1000, centers=4, cluster_std=1.5, random_state=42, figsize=(10, 5)):
+    X, y = make_blobs(n_samples=n_samples, centers=centers, cluster_std=cluster_std, random_state=random_state)
+    
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(x=X[:, 0], y=X[:, 1], color="#faaa11", s=50, alpha=0.4, label='Datos Originales')
+    plt.title('Datos originales')
+    plt.xlabel('Característica 1')
+    plt.ylabel('Característica 2')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+def clustersWithMetrics(n_samples=1000, centers=4, cluster_std=1.5, random_state=42, figsize=(15, 8)):
+    # Generar datos sintéticos
+    X, y = make_blobs(n_samples=n_samples, centers=centers, cluster_std=cluster_std, random_state=random_state)
+
+    # Rango de valores de k para probar
+    k_values = range(2, 10)
+
+    # Crear la figura
+    fig, axs = plt.subplots(2, 4, figsize=(15, 8))
+    axs = axs.ravel()
+
+    # Evaluar diferentes valores de k
+    for i, k in enumerate(k_values):
+        kmeans = KMeans(n_clusters=k, random_state=random_state)
+        labels = kmeans.fit_predict(X)
+
+        sil_score = silhouette_score(X, labels)
+        db_score = davies_bouldin_score(X, labels)
+
+        axs[i].scatter(X[:, 0], X[:, 1], c=labels, s=30, cmap='Accent', edgecolor='k', alpha=0.8)
+        axs[i].set_title(f"Silueta = {sil_score:.2f}\nDavies-Bouldin = {db_score:.2f}\nK = {k}")
+        axs[i].set_xticks([])
+        axs[i].set_yticks([])
+
+    # Añadir una caja alrededor del mejor resultado (opcional)
+    best_k_index = np.argmax([silhouette_score(X, KMeans(n_clusters=k, random_state=random_state).fit_predict(X)) for k in k_values])
+    # axs[best_k_index].patch.set_edgecolor('magenta')
+    axs[best_k_index].patch.set_linewidth(4)
+
+    plt.tight_layout()
+    plt.show()
+
+def compararOriginalesConAgrupados(n_samples=1000, centers=4, cluster_std=1.5, random_state=42, figsize=(14, 6), n_clusters=4):
+    X, y = make_blobs(n_samples=n_samples, centers=centers, cluster_std=cluster_std, random_state=random_state)
+    kmeans = KMeans(n_clusters=n_clusters, random_state=random_state)
+    y_kmeans = kmeans.fit_predict(X)
+
+    ##grafico de 1x2 para mostrar los datos originales y los agrupados
+    fig, axs = plt.subplots(1, 2, figsize=figsize)
+    axs[0].scatter(X[:, 0], X[:, 1], c=y, s=50, cmap='viridis', alpha=0.4)
+    #x=X[:, 0], y=X[:, 1], color="#faaa11", s=50, alpha=0.4, label='Datos Originales'
+    axs[0].set_title('Datos Originales separados por color')
+    axs[1].scatter(X[:, 0], X[:, 1], c=y_kmeans, s=50, cmap='Accent', alpha=0.4)
+    axs[1].set_title(f'Datos Agrupados con K-means (k={n_clusters})')
     plt.show()
