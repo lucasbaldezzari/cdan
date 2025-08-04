@@ -218,7 +218,7 @@ def showCirclesWithKmeans(n_samples=1000, noise=0.05, factor=0.5, random_state=4
     ##genero gráfico de dos columnas. En la primer columna muestro los originales, y en la segunda los datos pero pintados en base
     #a las etiquetas de K-means
     fig, axes = plt.subplots(1, 2, figsize=figsize)
-    axes[0].scatter(X[:, 0], X[:, 1], cmap='viridis', s=50, alpha=0.7)
+    axes[0].scatter(X[:, 0], X[:, 1], color="#1124fa", s=50, alpha=0.7)
     axes[0].set_title("Datos Originales")   
     axes[0].set_xlabel("Feature 1")
     axes[0].set_ylabel("Feature 2")
@@ -243,7 +243,7 @@ def showCirclesWithDBSCAN(n_samples=1000, noise=0.05, factor=0.5, random_state=4
     # Genero gráfico de dos columnas. En la primer columna muestro los originales, y en la segunda los datos pero pintados en base
     # a las etiquetas de DBSCAN
     fig, axes = plt.subplots(1, 2, figsize=figsize)
-    axes[0].scatter(X[:, 0], X[:, 1], cmap='viridis', s=50, alpha=0.7)
+    axes[0].scatter(X[:, 0], X[:, 1], color="#1124fa", s=50, alpha=0.7)
     axes[0].set_title("Datos Originales")   
     axes[0].set_xlabel("Feature 1")
     axes[0].set_ylabel("Feature 2")
