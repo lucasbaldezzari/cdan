@@ -3,6 +3,9 @@ from sklearn.datasets import make_blobs
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn_extra.cluster import KMedoids
+from sklearn.datasets import load_iris
+import pandas as pd
 
 def makeAndPlotBlobs(n_samples=2000,random_state=7,figsize=(10, 5)):
     # extra code – the exact arguments of make_blobs() are not important
@@ -172,4 +175,168 @@ def plotOriginalConverDiver(K=5,n_samples=2000, random_state=7, figsize=(12, 5),
     plt.xlabel("Gasto mensual en compras")
     plt.ylabel("Frecuencia de compras", rotation=90)
 
+    plt.show()
+
+def plotDataOutliers(figsize=(8, 4)):
+
+    # Generar datos sintéticos con un outlier
+    # np.random.seed(0)
+    cluster1 = np.random.normal(loc=[2, 2], scale=0.5, size=(50, 2))
+    cluster2 = np.random.normal(loc=[7, 2], scale=0.5, size=(50, 2))
+    outliers = np.array([[25, 8],[32,8.5]])  # punto extremo
+    X = np.vstack([cluster1, cluster2, outliers])
+
+    # Aplicar K-means
+    kmeans = KMeans(n_clusters=2, random_state=0, n_init=10)
+    kmeans_labels = kmeans.fit_predict(X)
+    kmeans_centroids = kmeans.cluster_centers_
+
+    # Visualización comparativa
+    fig, axes = plt.subplots(1, 1, figsize=figsize)
+
+    # K-means plot
+    axes.scatter(X[:, 0], X[:, 1], c=kmeans_labels, cmap='Set2_r', s=50, alpha=0.6, label='Datos normales')
+    # axes.scatter(kmeans_centroids[:, 0], kmeans_centroids[:, 1], c='black', marker='X', s=100, label='Centroide')
+    axes.scatter(outliers[:, 0], outliers[:, 1], c='red', s=50, label='Outliers', edgecolor='black')
+    axes.set_title("Datos con Outliers")
+    axes.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+    #activo grid
+    plt.close()
+
+def kmeansOutliers(K=2,figsize=(8,4)):
+    cluster1 = np.random.normal(loc=[2, 2], scale=0.5, size=(50, 2))
+    cluster2 = np.random.normal(loc=[7, 2], scale=0.5, size=(50, 2))
+    outliers = np.array([[25, 8],[32,8.5]])  # punto extremo
+    X = np.vstack([cluster1, cluster2, outliers])
+
+    # Aplicar K-means
+    kmeans = KMeans(n_clusters=K, random_state=0, n_init=10)
+    kmeans_labels = kmeans.fit_predict(X)
+    kmeans_centroids = kmeans.cluster_centers_
+
+
+    # Visualización comparativa
+    fig, axes = plt.subplots(1, 1, figsize=figsize)
+
+    # K-means plot
+    axes.scatter(X[:, 0], X[:, 1], c=kmeans_labels, cmap='Set2_r', s=30)
+    axes.scatter(kmeans_centroids[:, 0], kmeans_centroids[:, 1], c='black', marker='X', s=100, label='Centroide')
+    axes.scatter(outliers[:, 0], outliers[:, 1], c='red', s=50, label='Outliers', edgecolor='black')
+    axes.set_title("Kmeans agrupando datos con outliers")
+    axes.legend()
+
+    plt.tight_layout()
+    plt.grid()
+    plt.show()
+    plt.close()
+
+def kmedoidsOutliers(K=2,figsize=(8,4)):
+    cluster1 = np.random.normal(loc=[2, 2], scale=0.5, size=(50, 2))
+    cluster2 = np.random.normal(loc=[7, 2], scale=0.5, size=(50, 2))
+    outliers = np.array([[25, 8],[32,8.5]])  # punto extremo
+    X = np.vstack([cluster1, cluster2, outliers])
+
+    # Aplicar K-medoids
+    kmedoids = KMedoids(n_clusters=K, random_state=0)
+    kmedoids_labels = kmedoids.fit_predict(X)
+    kmedoids_centroids = kmedoids.cluster_centers_
+
+    # Visualización comparativa
+    fig, axes = plt.subplots(1, 1, figsize=figsize)
+
+    # K-medoids plot
+    axes.scatter(X[:, 0], X[:, 1], c=kmedoids_labels, cmap='Set2_r', s=30)
+    axes.scatter(kmedoids_centroids[:, 0], kmedoids_centroids[:, 1], c='black', marker='X', s=100, label='Centroide')
+    axes.scatter(outliers[:, 0], outliers[:, 1], c='red', s=50, label='Outliers', edgecolor='black')
+    axes.set_title("Kmedoids agrupando datos con outliers")
+    axes.legend()
+
+    plt.tight_layout()
+    plt.grid()
+    plt.show()
+    plt.close()
+
+def transform_and_get_iris():
+    """
+    Columna original	Nombre simulado	            Descripción de negocio
+    sepal length (cm)	media_visitas_diarias	    Cantidad promedio de visitas diarias al producto (popularidad)
+    sepal width (cm)	precio_unitario	            Precio en USD del producto
+    petal length (cm)	unidades_vendidas_mensual	Unidades vendidas por mes
+    petal width (cm)	valoracion_media	        Valoración media de usuarios (1 a 5)
+
+    labels = Tipo de cliente que más compra ese producto
+
+    Código orig	       Descripción del cliente	        ¿Qué busca?
+    0	               Cliente explorador	            Navega mucho, compra poco. Interesado en novedades
+                                                        y precios bajos.	Buen precio, variedad, promociones
+    1	               Cliente comprometido	            Compra de forma recurrente productos específicos.
+                                                        Fiel a ciertos productos.	Alta valoración, confianza, calidad
+    2	               Cliente impulsivo	            Compra mucho y rápido. Le importa menos el precio si
+                                                        el producto es atractivo.	Ventas altas, buena valoración
+        
+    """
+    iris = load_iris()
+    ##cambio las columnas
+    df = pd.DataFrame(iris.data, columns=
+                      [
+                          "media_visitas_diarias",
+                          "precio_unitario",
+                          "unidades_vendidas_mensuales",
+                          "valoracion_media"
+                      ])
+    df["segmento"] = iris.target
+
+    ##pasamos la columna valoración media en un rango de 1 a 5
+    df["valoracion_media"] = (df["valoracion_media"] - df["valoracion_media"].min()) / \
+                              (df["valoracion_media"].max() - df["valoracion_media"].min())
+    df["valoracion_media"] = df["valoracion_media"] * 4 + 1
+    return df
+
+def plot3Ddata(elev=10, azim=160, figsize=(12, 6)):
+
+    # Cargar el dataset Iris
+    iris = transform_and_get_iris()
+    X = iris[[
+                          "media_visitas_diarias",
+                          "precio_unitario",
+                          "unidades_vendidas_mensuales",
+                          "valoracion_media"
+                      ]].values
+    y = iris["segmento"].values
+    target_names = ["media_visitas_diarias", "precio_unitario", "unidades_vendidas_mensuales", "valoracion_media"]
+
+    # Selección de características
+    x_axis = 0  # media_visitas_diarias
+    y_axis = 1  # precio_unitario
+    z_axis = 2  # unidades_vendidas_mensuales
+    colors = ['r', 'g', 'b']
+
+    # Crear figura y ejes 3D
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111, projection='3d')
+
+    for i, color, label in zip(np.unique(y), colors, target_names):
+        ax.scatter(
+            X[y == i, x_axis],
+            X[y == i, y_axis],
+            X[y == i, z_axis],
+            s=50,
+            alpha=0.5,
+            color=color,
+            label=label
+        )
+
+    # Etiquetas
+    ax.set_xlabel(target_names[x_axis])
+    ax.set_ylabel(target_names[y_axis])
+    ax.set_zlabel(target_names[z_axis])
+    ax.set_title('Datos en 3D')
+    ax.legend()
+
+    ax.view_init(elev=elev, azim=azim)  # elev: altura de la cámara, azim: rotación horizontal
+
+    plt.tight_layout()
     plt.show()
