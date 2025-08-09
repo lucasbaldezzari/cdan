@@ -72,7 +72,7 @@ def plot_decision_boundaries(clusterer, X, resolution=1000,
     else:
         plt.tick_params(labelleft=False)
 
-def clusteringAndPlot(K=5, n_samples=2000, random_state=7, figsize=(10, 5)):
+def clusteringAndPlot(K=5, n_samples=2000, random_state=7, figsize=(10, 5), getInercia = False):
     blob_centers = np.array([[ 0.2,  2.3], [-1.5 ,  2.3], [-2.8,  1.8],
                              [-2.8,  2.8], [-2.8,  1.3]])
     blob_std = np.array([0.4, 0.3, 0.1, 0.1, 0.1])
@@ -85,6 +85,9 @@ def clusteringAndPlot(K=5, n_samples=2000, random_state=7, figsize=(10, 5)):
     plt.figure(figsize=figsize)
     plot_decision_boundaries(kmeans, X)
     plt.title("Clustering usando K-means")
+
+    if getInercia:
+        print(f"Inercia para K={K}: {kmeans.inertia_:.2f}")
     plt.show()
 
 
@@ -339,4 +342,31 @@ def plot3Ddata(elev=10, azim=160, figsize=(12, 6)):
     ax.view_init(elev=elev, azim=azim)  # elev: altura de la cámara, azim: rotación horizontal
 
     plt.tight_layout()
+    plt.show()
+
+
+def getElbow(n_samples=2000,random_state=7,figsize=(10, 5), max_k = 30, printear=True):
+    # extra code – the exact arguments of make_blobs() are not important
+    blob_centers = np.array([[ 0.2,  2.3], [-1.5 ,  2.3], [-2.8,  1.8],
+                            [-2.8,  2.8], [-2.8,  1.3]])
+    blob_std = np.array([0.4, 0.3, 0.1, 0.1, 0.1])
+    X, y = make_blobs(n_samples=n_samples, centers=blob_centers, cluster_std=blob_std, random_state=random_state)
+
+    K = np.arange(1, max_k + 1)
+    kmeans_inertia = []
+    for k in K:
+        kmeans = KMeans(n_clusters=k, n_init=10, random_state=42)
+        kmeans.fit(X)
+        kmeans_inertia.append(kmeans.inertia_)
+        if printear:
+            print(f"Agrupando para K={k}, Inercia={kmeans.inertia_:.2f}")
+    plt.figure(figsize=figsize)
+    plt.plot(K, kmeans_inertia, marker='o', color="#2387fa")
+    plt.xlabel("Número de clústers (K)")
+    plt.ylabel("Inercia (suma de distancias dentro de clústers)")
+    plt.title("Inercia de K-means para diferentes valores de K")
+    plt.xticks(K)
+    plt.grid(True)
+    plt.tight_layout()
+    # plt.savefig("/mnt/data/kmeans_inertia_plot.png")
     plt.show()
