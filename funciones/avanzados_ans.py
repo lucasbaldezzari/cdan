@@ -8,7 +8,11 @@ from sklearn.datasets import make_blobs
 from sklearn.datasets import make_moons
 from sklearn.metrics import silhouette_score, davies_bouldin_score
 from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.preprocessing import StandardScaler
 from sklearn.datasets import load_iris
+from scipy.optimize import linear_sum_assignment
+from sklearn.metrics import confusion_matrix
 
 ##función para crear datos sintéticos y agrupar con ka means
 
@@ -295,3 +299,219 @@ def dendo1stExample(n_samples=50, centers=4, cluster_std=1.4, random_state=10,
         axes[1].set_ylabel("Distancia")
 
     plt.show()
+
+def realdataWithDendo(columnasInteres = ["media_visitas_diarias","unidades_vendidas_mensuales"],
+                      show_real_data=True, show_dendo=True, figsize=(16, 6), show_true_groups=False,
+                      show_dendo_colors=False, umbral_corte=None, above_threshold_color="black", show_scores = False,
+                      estandarizar=False):
+
+    data = transform_and_get_iris()
+    y_true = data["segmento"].values
+    X_raw = data[columnasInteres].values
+
+        # Estandarización (recomendado con KMeans y Ward)
+    if estandarizar:
+        scaler = StandardScaler()
+        X = scaler.fit_transform(X_raw)
+    else:
+        X = X_raw
+
+    Z = linkage(X, method='ward')
+    y_cut = None
+    k_groups = None
+    silhouette_avg = None
+    db_score = None
+    if umbral_corte is not None:
+        # Clusters por distancia (horizontal cut)
+        y_cut = fcluster(Z, t=umbral_corte, criterion='distance')
+        k_groups = len(np.unique(y_cut))
+        silhouette_avg = silhouette_score(X, y_cut)
+        db_score = davies_bouldin_score(X, y_cut)
+
+
+    if show_real_data and not show_dendo:
+        plt.figure(figsize=figsize)
+        if show_true_groups:
+            # Colorea por etiquetas verdaderas si se pidió y no hay corte
+            plt.scatter(X[:, 0], X[:, 1], c=y_true, cmap='viridis',
+                        s=100, edgecolor='k')
+            plt.legend([f"Grupos verdaderos (k={len(np.unique(y_true))})"], loc='lower left')
+        elif y_cut is not None:
+            # Colorea por clusters obtenidos del corte
+            plt.scatter(X[:, 0], X[:, 1], c=y_cut, cmap='tab10',
+                        s=100, edgecolor='k')
+            if not show_scores:
+                plt.title(f"Datos de testeo - Se pintan grupos para umbral {umbral_corte} - N° grupos {k_groups}")
+            else:
+                plt.title(f"Datos de testeo - Se pintan grupos para umbral {umbral_corte} - N° grupos {k_groups}\nSilhouette: {silhouette_avg:.2f} - DB: {db_score:.2f}")
+        else:
+            # Un solo color
+            plt.scatter(X[:, 0], X[:, 1], color="#0303bc", edgecolor='k',
+                        alpha=0.7, s=100, label='Datos')
+            plt.legend(loc='lower left')
+            plt.title("Datos de testeo sin agrupar")
+
+        plt.xlabel("Característica 1")
+        plt.ylabel("Característica 2")
+        plt.grid()
+
+    if show_dendo and not show_real_data:
+        plt.figure(figsize=figsize)
+        if umbral_corte is None:
+            # Sin colores (todo en negro)
+            dendrogram(Z, color_threshold=0, above_threshold_color="black")
+            plt.title("Dendrograma sin línea de corte")
+        else:
+            # Colores por debajo del umbral; por encima, color fijo
+            dendrogram(Z, color_threshold=umbral_corte,
+                       above_threshold_color=above_threshold_color)
+            plt.axhline(y=umbral_corte, color='red', linestyle='--')
+            if not show_scores:
+                plt.title(f"Dendrograma (umbral t={umbral_corte})")
+            else:
+                plt.title(f"Dendrograma (umbral t={umbral_corte})\nSilhouette: {silhouette_avg:.2f} - DB: {db_score:.2f}")
+
+        plt.xlabel("Muestras")
+        plt.ylabel("Distancia")
+        # plt.grid()
+
+    if show_real_data and show_dendo:
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        if show_true_groups and y_cut is None:
+            # Colorea por etiquetas verdaderas si se pidió y no hay corte
+            axes[0].scatter(X[:, 0], X[:, 1], c=y_true, cmap='viridis',
+                        s=100, edgecolor='k')
+            axes[0].set_title("Datos reales - Se pintan grupos originales")
+        elif y_cut is not None:
+            # Colorea por clusters obtenidos del corte
+            axes[0].scatter(X[:, 0], X[:, 1], c=y_cut, cmap='tab10',
+                        s=100, edgecolor='k')
+            if not show_scores:
+                axes[0].set_title(f"Datos reales - Se pintan grupos para umbral {umbral_corte} - N° grupos {k_groups}")
+            else:
+                axes[0].set_title(f"Datos reales - Se pintan grupos para umbral {umbral_corte} - N° grupos {k_groups}\nSilhouette: {silhouette_avg:.2f} - DB: {db_score:.2f}")
+        else:
+            # Un solo color
+            axes[0].scatter(X[:, 0], X[:, 1], color="#0303bc", edgecolor='k',
+                        alpha=0.7, s=100, label='Datos')
+            axes[0].legend(loc='lower left')
+            axes[0].set_title(f"Datos reales sin agrupar")
+
+        
+        axes[0].set_xlabel("Característica 1")
+        axes[0].set_ylabel("Característica 2")
+        axes[0].grid()
+
+        if umbral_corte is None:
+            # Sin colores (todo en negro)
+            dendrogram(Z, color_threshold=0, above_threshold_color="black")
+            axes[1].set_title("Dendrograma para datos reales (sin línea de corte)")
+        else:
+            # Colores por debajo del umbral; por encima, color fijo
+            dendrogram(Z, color_threshold=umbral_corte,
+                       above_threshold_color=above_threshold_color)
+            axes[1].axhline(y=umbral_corte, color='red', linestyle='--')
+            if not show_scores:
+                axes[1].set_title(f"Dendrograma para datos reales (umbral corte = {umbral_corte})")
+            else:
+                axes[1].set_title(f"Dendrograma para datos reales (umbral corte = {umbral_corte})\nSilhouette: {silhouette_avg:.2f} - DB: {db_score:.2f}")
+
+        axes[1].set_xlabel("Muestras")
+        axes[1].set_ylabel("Distancia")
+
+    plt.show()
+
+def clustering_accuracy(y_true, y_pred):
+    """
+    Calcula la precisión de clustering (porcentaje de puntos correctamente asignados)
+    emparejando clusters predichos con clases reales vía algoritmo Húngaro.
+    """
+    labels_true = np.unique(y_true)
+    labels_pred = np.unique(y_pred)
+
+    # Matriz de confusión entre etiquetas verdaderas y clusters
+    cm = confusion_matrix(y_true, y_pred, labels=labels_true)
+    
+    # Algoritmo húngaro: encontrar la mejor asignación
+    row_ind, col_ind = linear_sum_assignment(-cm)  # maximizamos coincidencias
+    correct = cm[row_ind, col_ind].sum()
+    
+    return correct / len(y_true)
+
+def comparing_algorithms(K, epsilon, min_samples, umbral_corte=None,
+                         columnasInteres = ["media_visitas_diarias","unidades_vendidas_mensuales"],
+                         estandarizar=False, random_state=42):
+    # Aquí puedes implementar la comparación de diferentes algoritmos
+    data = transform_and_get_iris()
+    y_true = data["segmento"].values
+    X_raw = data[columnasInteres].values
+
+    # Estandarización (recomendado con KMeans y Ward)
+    if estandarizar:
+        scaler = StandardScaler()
+        X = scaler.fit_transform(X_raw)
+    else:
+        X = X_raw
+
+    Z = linkage(X, method='ward')
+
+    # K-means
+    kmeans = KMeans(n_clusters=K)
+    kmeans.fit(X)
+    y_kmeans = kmeans.labels_
+
+    # DBSCAN
+    dbscan = DBSCAN(eps=epsilon, min_samples=min_samples)
+    y_dbscan = dbscan.fit_predict(X)
+    k_dbscan = len(np.unique(y_dbscan[y_dbscan != -1]))  # Excluye outliers (-1)
+
+    # Clustering Jerárquico
+    if umbral_corte is not None:
+        # Clusters por distancia (horizontal cut)
+        y_hierarchical = fcluster(Z, t=umbral_corte, criterion='distance')
+        k_groups = len(np.unique(y_hierarchical))
+        silhouette_avg = silhouette_score(X, y_hierarchical)
+        db_score = davies_bouldin_score(X, y_hierarchical)
+
+
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    ##datos reales
+    axes[0,0].scatter(X[:, 0], X[:, 1], c=y_true, cmap='viridis', s=100, edgecolor='k')
+    axes[0,0].set_title("Datos reales - Grupos originales")
+
+    # K-means
+    axes[0,1].scatter(X[:, 0], X[:, 1], c=y_kmeans, cmap='Blues', s=100, edgecolor='k')
+    axes[0,1].set_title(f"K-means - Grupos detectados - K={K}")
+
+    # DBSCAN
+    axes[1,0].scatter(X[:, 0], X[:, 1], c=y_dbscan, cmap='Reds', s=100, edgecolor='k')
+    axes[1,0].set_title(f"DBSCAN - Grupos detectados {k_dbscan}")
+
+    # Clustering Jerárquico
+    axes[1,1].scatter(X[:, 0], X[:, 1], c=y_hierarchical, cmap='Greens', s=100, edgecolor='k')
+    axes[1,1].set_title(f"Jerárquico - Grupos detectados - Umbral {umbral_corte} - Grupos {k_groups}")
+
+    print("*********** MÉTRICAS ***********")
+    for y_pred, algo_name in zip([y_kmeans, y_dbscan, y_hierarchical],
+                                  ["K-means", "DBSCAN", "Jerárquico"]):
+        silhouette_avg = silhouette_score(X, y_pred)
+        db_score = davies_bouldin_score(X, y_pred)
+        print(f"{algo_name} - Silhouette: {silhouette_avg:.2f} - DB: {db_score:.2f}")
+    print("*********************************************",end="\n\n")
+
+    print("*********** PRECISIÓN DE CLUSTERING ***********")
+    modelos = {
+        "K-means": y_kmeans,
+        "DBSCAN": y_dbscan,
+        "Jerárquico (K)": y_hierarchical
+    }
+
+    for nombre, y_pred in modelos.items():
+        # Ojo: DBSCAN puede dar etiqueta -1 (ruido). Lo mantenemos.
+        acc = clustering_accuracy(y_true, y_pred)
+        print(f"{nombre} - Precisión de clustering: {acc*100:.2f}%")
+    print("*********************************************")
+
+    plt.show()
+
+    return
