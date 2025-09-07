@@ -94,8 +94,8 @@ def plotDigit(digit, cmap = "Blues", show = False):
 
 def loadMNIST():
     try:
-        X = np.load("cdan\\datos\\mnist_X_1000.npy", allow_pickle=True)
-        y = np.load("cdan\\datos\\mnist_y_1000.npy", allow_pickle=True)
+        X = np.load("cdan//datos//mnist_X_1000.npy", allow_pickle=True)
+        y = np.load("cdan//datos//mnist_y_1000.npy", allow_pickle=True)
     except FileNotFoundError:
         X = np.load("datos\\mnist_X_1000.npy", allow_pickle=True)
         y = np.load("datos\\mnist_y_1000.npy", allow_pickle=True)
@@ -445,12 +445,16 @@ def plotDigitReconstruction(num_components=None, digit=5, ndigits_to_show = 5, c
     plt.tight_layout()
     plt.show()
 
-
-def plotRealEstatePCA(figsize=(10,6),point_size=3, opacity=0.7):
+def openRealEstateData():
     try:
-        df = pd.read_csv('cdan\\datos\\real_estate.csv', encoding='utf-8')
+        df = pd.read_csv('cdan//datos//real_estate.csv', encoding='utf-8')
     except FileNotFoundError:
         df = pd.read_csv('datos\\real_estate.csv', encoding='utf-8')
+    return df
+
+
+def plotRealEstatePCA(figsize=(10,6),point_size=3, opacity=0.7):
+    df = openRealEstateData()
 
     df['Categoria'] = pd.qcut(df['price of unit area'], 3, labels=['1.Económica', '2.Rango-Medio', '3.Cara'])
     df['Categoria'].value_counts().sort_index()
@@ -540,10 +544,7 @@ def varianceExplainedPlot(max_components=100, figsize=(10,6), pasos=30):
 
 
 def houserWithPCA(n_components=2, figsize=(8,6), point_size=8, opacity=0.7):
-    try:
-        df = pd.read_csv('cdan\\datos\\real_estate.csv', encoding='utf-8')
-    except FileNotFoundError:
-        df = pd.read_csv('datos\\real_estate.csv', encoding='utf-8')
+    df = openRealEstateData()
 
     df['Categoria'] = pd.qcut(df['price of unit area'], 3, labels=['1.Económica', '2.Rango-Medio', '3.Cara'])
     # Check distribution
@@ -607,10 +608,7 @@ def houserWithPCA(n_components=2, figsize=(8,6), point_size=8, opacity=0.7):
         fig.show()
 
 def houserWithLDA(n_components=2, figsize=(8,6), point_size=8, opacity=0.7):
-    try:
-        df = pd.read_csv('cdan\\datos\\real_estate.csv', encoding='utf-8')
-    except FileNotFoundError:
-        df = pd.read_csv('datos\\real_estate.csv', encoding='utf-8')
+    df = openRealEstateData()
 
     df['Categoria'] = pd.qcut(df['price of unit area'], 3, labels=['1.Económica', '2.Rango-Medio', '3.Cara'])
     # Check distribution
@@ -666,10 +664,7 @@ def houserWithLDA(n_components=2, figsize=(8,6), point_size=8, opacity=0.7):
         
 def classifiedUsingPCA(clasificador='SVM', num_comps=2, test_size=0.3, random_state=42,
                        show_info = True, show_cm = True, return_cm = False):
-    try:
-        df = pd.read_csv('cdan\\datos\\real_estate.csv', encoding='utf-8')
-    except FileNotFoundError:
-        df = pd.read_csv('datos\\real_estate.csv', encoding='utf-8')
+    df = openRealEstateData()
 
     df['Categoria'] = pd.qcut(df['price of unit area'], 3, labels=['1.Económica', '2.Rango-Medio', '3.Cara'])
     # Check distribution
@@ -731,10 +726,7 @@ def classifiedUsingPCA(clasificador='SVM', num_comps=2, test_size=0.3, random_st
 
 def classifiedUsingLDA(clasificador='SVM', num_comps=2, test_size=0.3, random_state=42,
                        show_info = True, show_cm = True, return_cm = False):
-    try:
-        df = pd.read_csv('cdan\\datos\\real_estate.csv', encoding='utf-8')
-    except FileNotFoundError:
-        df = pd.read_csv('datos\\real_estate.csv', encoding='utf-8')
+    df = openRealEstateData()
 
     df['Categoria'] = pd.qcut(df['price of unit area'], 3, labels=['1.Económica', '2.Rango-Medio', '3.Cara'])
     # Check distribution
