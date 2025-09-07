@@ -9,6 +9,6 @@ Este material es para fines educativos y no debe ser utilizado para fines comerc
 - [x] Introducción a Google Colab
 - [x] Intro al Aprendizaje No Supervisado (ANS)
 - [x] Algoritmos básicos de clustering
-- [ ] Algoritmos avanzados de clustering
+- [x] Algoritmos avanzados de clustering
 - [ ] Reducción de dimensionalidad
 - [ ] Aplicación de ANS y AS a un problema real.
