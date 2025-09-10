@@ -496,7 +496,6 @@ def plotRealEstatePCA(figsize=(10,6),point_size=3, opacity=0.7):
                                             tickfont=dict(size=10),
                                             )))
 
-    # Update marker size
     fig.update_traces(marker=dict(size=point_size, opacity=opacity))
 
     fig.show()
@@ -533,7 +532,7 @@ def varianceExplainedPlot(max_components=100, figsize=(10,6), pasos=30):
     plt.xlabel("Número de componentes principales")
     plt.title(f"PCA en MNIST - $Varianza\ explicada$ - Cantidad de componentes: {k}")
     plt.xlim(0, k)  # incluye el 0 (aunque no haya barra en 0) y el máximo k
-    # Ticks 0, 10, 20, ..., k (si k no es múltiplo de 10, añadir k al final)
+    
     ticks = np.arange(0, k + 1, pasos)
     if ticks[-1] != k:
         ticks = np.r_[ticks, k]

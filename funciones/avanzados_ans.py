@@ -14,8 +14,6 @@ from sklearn.datasets import load_iris
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import confusion_matrix
 
-##función para crear datos sintéticos y agrupar con ka means
-
 def showDataKmeans(K=2, n_samples=2000, random_seed=0, showCentroides = False, figsize=(12, 6), showGrupos = False):
     # Generar datos sintéticos de círculos con un círculo en el centro y otro alrededor
     X_circles, y_circles = make_circles(n_samples=n_samples, noise=0.05, factor=0.5, random_state=random_seed)
@@ -56,7 +54,6 @@ def showDataKmeans(K=2, n_samples=2000, random_seed=0, showCentroides = False, f
     plt.show()
 
 def plotComparativa():
-    # Generar datasets
     X_moons, _ = make_moons(n_samples=500, noise=0.05, random_state=42)
     X_circles, _ = make_circles(n_samples=500, factor=0.5, noise=0.05, random_state=42)
     X_blobs, _ = make_blobs(n_samples=500, centers=2, cluster_std=0.6, random_state=42)
@@ -104,7 +101,6 @@ def circlesWithDBSCAN(epsilon=0.2, min_points=5, showClustering = False, n_sampl
     db = DBSCAN(eps=epsilon, min_samples=min_points)
     y_db = db.fit_predict(X)
 
-    #grafico de los puntos
     plt.figure(figsize=figsize)
     if showClustering:
         plt.scatter(X[:, 0], X[:, 1], c=y_db, cmap='viridis', edgecolor='k', alpha=0.7)
@@ -127,7 +123,6 @@ def circlesNoisyWithDBSCAN(epsilon=0.1, min_points=10, showClustering = False, n
     db = DBSCAN(eps=epsilon, min_samples=min_points)
     y_db = db.fit_predict(X)
 
-    #grafico de los puntos
     plt.figure(figsize=figsize)
     if showClustering:
         plt.scatter(X[:, 0], X[:, 1], c=y_db, cmap='Set3', edgecolor='k', alpha=0.7)
@@ -432,7 +427,6 @@ def clustering_accuracy(y_true, y_pred):
     # Matriz de confusión entre etiquetas verdaderas y clusters
     cm = confusion_matrix(y_true, y_pred, labels=labels_true)
     
-    # Algoritmo húngaro: encontrar la mejor asignación
     row_ind, col_ind = linear_sum_assignment(-cm)  # maximizamos coincidencias
     correct = cm[row_ind, col_ind].sum()
     
@@ -475,7 +469,6 @@ def comparing_algorithms(K, epsilon, min_samples, umbral_corte=None,
 
 
     fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-    ##datos reales
     axes[0,0].scatter(X[:, 0], X[:, 1], c=y_true, cmap='viridis', s=100, edgecolor='k')
     axes[0,0].set_title("Datos reales - Grupos originales")
 
@@ -507,7 +500,6 @@ def comparing_algorithms(K, epsilon, min_samples, umbral_corte=None,
     }
 
     for nombre, y_pred in modelos.items():
-        # Ojo: DBSCAN puede dar etiqueta -1 (ruido). Lo mantenemos.
         acc = clustering_accuracy(y_true, y_pred)
         print(f"{nombre} - Precisión de clustering: {acc*100:.2f}%")
     print("*********************************************")

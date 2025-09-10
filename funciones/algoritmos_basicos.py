@@ -8,7 +8,6 @@ from sklearn.datasets import load_iris
 import pandas as pd
 
 def makeAndPlotBlobs(n_samples=2000,random_state=7,figsize=(10, 5)):
-    # extra code – the exact arguments of make_blobs() are not important
     blob_centers = np.array([[ 0.2,  2.3], [-1.5 ,  2.3], [-2.8,  1.8],
                             [-2.8,  2.8], [-2.8,  1.3]])
     blob_std = np.array([0.4, 0.3, 0.1, 0.1, 0.1])
@@ -196,8 +195,6 @@ def plotDataOutliers(figsize=(8, 4)):
 
     # Visualización comparativa
     fig, axes = plt.subplots(1, 1, figsize=figsize)
-
-    # K-means plot
     axes.scatter(X[:, 0], X[:, 1], c=kmeans_labels, cmap='Set2_r', s=50, alpha=0.6, label='Datos normales')
     # axes.scatter(kmeans_centroids[:, 0], kmeans_centroids[:, 1], c='black', marker='X', s=100, label='Centroide')
     axes.scatter(outliers[:, 0], outliers[:, 1], c='red', s=50, label='Outliers', edgecolor='black')
@@ -220,11 +217,7 @@ def kmeansOutliers(K=2,figsize=(8,4)):
     kmeans_labels = kmeans.fit_predict(X)
     kmeans_centroids = kmeans.cluster_centers_
 
-
-    # Visualización comparativa
     fig, axes = plt.subplots(1, 1, figsize=figsize)
-
-    # K-means plot
     axes.scatter(X[:, 0], X[:, 1], c=kmeans_labels, cmap='Set2_r', s=30)
     axes.scatter(kmeans_centroids[:, 0], kmeans_centroids[:, 1], c='black', marker='X', s=100, label='Centroide')
     axes.scatter(outliers[:, 0], outliers[:, 1], c='red', s=50, label='Outliers', edgecolor='black')
@@ -247,10 +240,7 @@ def kmedoidsOutliers(K=2,figsize=(8,4)):
     kmedoids_labels = kmedoids.fit_predict(X)
     kmedoids_centroids = kmedoids.cluster_centers_
 
-    # Visualización comparativa
     fig, axes = plt.subplots(1, 1, figsize=figsize)
-
-    # K-medoids plot
     axes.scatter(X[:, 0], X[:, 1], c=kmedoids_labels, cmap='Set2_r', s=30)
     axes.scatter(kmedoids_centroids[:, 0], kmedoids_centroids[:, 1], c='black', marker='X', s=100, label='Centroide')
     axes.scatter(outliers[:, 0], outliers[:, 1], c='red', s=50, label='Outliers', edgecolor='black')
@@ -346,7 +336,6 @@ def plot3Ddata(elev=10, azim=160, figsize=(12, 6)):
 
 
 def getElbow(n_samples=2000,random_state=7,figsize=(10, 5), max_k = 30, printear=True):
-    # extra code – the exact arguments of make_blobs() are not important
     blob_centers = np.array([[ 0.2,  2.3], [-1.5 ,  2.3], [-2.8,  1.8],
                             [-2.8,  2.8], [-2.8,  1.3]])
     blob_std = np.array([0.4, 0.3, 0.1, 0.1, 0.1])

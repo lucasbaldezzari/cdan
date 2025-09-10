@@ -270,7 +270,6 @@ def makeAndShowBlobs(n_samples=1000, centers=4, cluster_std=1.5, random_state=42
     plt.show()
 
 def clustersWithMetrics(n_samples=1000, centers=4, cluster_std=1.5, random_state=42, figsize=(15, 8)):
-    # Generar datos sintéticos
     X, y = make_blobs(n_samples=n_samples, centers=centers, cluster_std=cluster_std, random_state=random_state)
 
     # Rango de valores de k para probar
