@@ -869,16 +869,6 @@ def gettingFeaturesImportanceFromPCA(n_components=2, figsize=(9, 3.6),cmap="Reds
     rank_pc1 = loadings.sort_values("|PC1|", ascending=False)[["Cargas PC1", "|PC1|"]]
     rank_pc2 = loadings.sort_values("|PC2|", ascending=False)[["Cargas PC2", "|PC2|"]]
 
-    # print("******************************************")
-    # print("Ranking para PC1")
-    # print(rank_pc1)
-    # print("******************************************",end="\n\n\n")
-
-    # print("******************************************")
-    # print("Ranking para PC2")
-    # print(rank_pc2)
-    # print("******************************************",end="\n\n\n")
-
     plt.figure(figsize=figsize)
     vals = pca.components_
     im2 = plt.imshow(vals, aspect="auto", cmap=cmap)
@@ -892,68 +882,3 @@ def gettingFeaturesImportanceFromPCA(n_components=2, figsize=(9, 3.6),cmap="Reds
             plt.text(j, i, f"{vals[i, j]:.2f}", ha="center", va="center", fontsize=12)
     plt.tight_layout()
     plt.show()
-
-# from sklearn.datasets import load_wine
-# datos = load_wine()
-# X_wine = datos.data
-# y_wine = datos.target
-# features = datos.feature_names
-# target_names = datos.target_names
-
-# print(X_wine.shape)  # (178, 13)
-# print(np.unique(y_wine, return_counts=True))
-# print(features)
-# print(target_names)
-
-
-
-# try:
-#     df = pd.read_csv('cdan//datos//Producto_Dataset_Segmentado.csv', encoding='utf-8')
-# except FileNotFoundError:
-#     df = pd.read_csv('datos\\Producto_Dataset_Segmentado.csv', encoding='utf-8')
-
-# df = df[df["product_category"] != "Outlier"]
-
-# # 2) Selección de variables
-# #    - numéricas para correlación, distribuciones y PCA
-# #    - buscamos columna de categoría si existe
-# candidate_cat_cols = [c for c in df.columns if c.lower() in ("product_category", "category", "segment", "clase", "label")]
-# cat_col = candidate_cat_cols[0] if candidate_cat_cols else None
-
-# # detectar columnas numéricas
-# num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-
-# # excluir IDs si los hay
-# id_like = [c for c in num_cols if "id" in c.lower()]
-# num_cols = [c for c in num_cols if c not in id_like]
-
-# # si no quedaron numéricas (raro), intentar convertir algunas conocidas
-# if len(num_cols) == 0:
-#     for c in df.columns:
-#         if c != cat_col:
-#             try:
-#                 df[c] = pd.to_numeric(df[c], errors="coerce")
-#             except Exception:
-#                 pass
-#     num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-#     num_cols = [c for c in num_cols if c not in id_like]
-
-# # Subset limpio para análisis
-# df_clean = df.copy()
-# # Mantener sólo filas completas en numéricas (y categoría si existe)
-# if cat_col:
-#     df_clean = df_clean.dropna(subset=num_cols + [cat_col])
-# else:
-#     df_clean = df_clean.dropna(subset=num_cols)
-
-# scaler = StandardScaler()
-# X = df_clean[num_cols].values
-# X_scaled = scaler.fit_transform(X)
-
-# pca = PCA(n_components=2, random_state=42)
-# X_pca = pca.fit_transform(X_scaled)
-
-# # DataFrame con scores de PCA + (opcional) categoría
-# pca_df = pd.DataFrame(X_pca, columns=["PC1", "PC2"])
-# if cat_col:
-#     pca_df[cat_col] = df_clean[cat_col].values
