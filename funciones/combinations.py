@@ -851,180 +851,6 @@ def classifyClusteringSVM(method="kmeans", feature1=None, feature2=None, n_clust
     plt.ylabel('Real')
     plt.show()
 
-## ************************************************************************************************************************
-## PARTE 3
-
-def loadSegmentedData(test_size=0.3, seed=42):
-    try:
-        df = pd.read_csv('cdan//datos//Producto_Dataset_Segmentado.csv')
-    except Exception as e:
-        df = pd.read_csv('datos\\Producto_Dataset_Segmentado.csv')
-    
-    # Dividir en características y etiquetas
-    X = df.drop(columns=['product_category']).values
-    y = df['product_category'].values
-    # Dividir en conjuntos de entrenamiento y prueba
-    X_train, X_test, y_train, y_test = train_test_split(X, y
-                                                    , test_size=test_size, random_state=seed, stratify=y)
-    
-    feature_names = df.drop(columns=['product_category']).columns
-
-    df_train = pd.DataFrame(X_train, columns=feature_names)
-    df_train['product_category'] = y_train
-    df_test = pd.DataFrame(X_test, columns=feature_names)
-    df_test['product_category'] = y_test
-
-    ##drop columna product_id
-    if 'product_id' in df_train.columns:
-        df_train = df_train.drop(columns=['product_id'])
-        df_test = df_test.drop(columns=['product_id'])
-
-    return df_train, df_test
-
-def basicAnalysisSegmentedDataset(pairplot_height=2):
-    df_train, df_test = loadSegmentedData()
-    ##quito filas Outlier de la columna product_category
-    df_train = df_train[df_train['product_category'] != "Outlier"]
-    df_test = df_test[df_test['product_category'] != "Outlier"]
-
-    feature_names = df_train.drop(columns=['product_category']).columns
-    #convierto a numéricas las columnas que se puedan
-    for col in feature_names:
-        df_train[col] = pd.to_numeric(df_train[col], errors='coerce')
-        df_test[col] = pd.to_numeric(df_test[col], errors='coerce')
-
-    num_cols = df_train.select_dtypes(include=[np.number]).columns.tolist()
-    cat_cols = [c for c in df_train.columns if c not in num_cols]
-
-    print("************************************************************************")
-    print("Categorías de productos en el dataset segmentado:")
-    ##cantidad por clase
-    class_counts = df_train['product_category'].value_counts(dropna=False).rename_axis('product_category').reset_index(name='count')
-    print("************************************************************************",end="\n\n")
-
-    print("************************************************************************")
-    print("Estadísticas descriptivas del dataset segmentado:")
-    print(df_train[num_cols].describe().T)
-    print("************************************************************************",end="\n\n")
-
-    # Skewness/Kurtosis
-    sk_kurt = pd.DataFrame({
-        'skew': df_train[num_cols].skew(numeric_only=True),
-        'kurtosis': df_train[num_cols].kurtosis(numeric_only=True)
-    }).sort_values('skew', key=lambda s: s.abs(), ascending=False)
-
-    print("************************************************************************")
-    print("Skewness y Kurtosis del dataset segmentado:")
-    print(sk_kurt)
-    print("************************************************************************",end="\n\n")
-
-    ##heatmap de la correlación entre las variables numéricas
-    plt.figure(figsize=(8, 6))
-    corr = df_train[num_cols].corr(numeric_only=True)
-    sns.heatmap(corr, annot=True, fmt=".2f", cmap="RdYlGn", square=True, cbar_kws={"shrink": .8})
-    plt.title("Matriz de correlación del dataset segmentado")
-    #ponto etiquetas del eje x en 45 grados
-    plt.xticks(rotation=45, ha='right')
-    # plt.show()
-
-    p = sns.pairplot(df_train[num_cols + ['product_category']], hue='product_category',
-                     diag_kind='kde', markers=["o", "s", "D"], palette='Set1',height=pairplot_height, aspect=1.2)
-    # Rotar solo las labels (nombres de variables) en los ejes
-    for ax in p.axes[-1, :]:  # última fila → etiquetas del eje x
-        ax.set_xlabel(ax.get_xlabel(),fontsize=9)
-
-    for ax in p.axes[:, 0]:  # primera columna → etiquetas del eje y
-        ax.set_ylabel(ax.get_ylabel(), fontsize=9)
-
-    plt.suptitle('Gráfico de dispersión y KDE del conjunto de datos segmentado', y=1.02)
-    # plt.tight_layout()
-    plt.show()
-
-def processSegmenDataset(return_data = False, n_components_pca = 2, apply_pca = False, seed=42,
-                          show_plots = True, remove_columns = []):
-    """
-    Función para aplicar procesamiento al dataset segmentado.
-
-    1. Separar target (product_category) de features.
-    2. Imputación: no hay faltantes → se omite.
-    3. Escalado: aplicar StandardScaler sobre todas las numéricas.
-    4. Opcional: aplicar PCA para reducir redundancia de las 4 variables altamente correlacionadas.
-    5. LDA: usarlo tanto como clasificador directo como transformador supervisado (máx. 2 dimensiones para A/B/C).
-    """
-
-    df_train, df_test = loadSegmentedData(seed=seed)
-    ##quito filas Outlier de la columna product_category
-    df_train = df_train[df_train['product_category'] != "Outlier"]
-    df_test = df_test[df_test['product_category'] != "Outlier"]
-
-    #remuevo las columnas que se pidan
-    if remove_columns:
-        df_train = df_train.drop(columns=remove_columns, errors='ignore')
-        df_test = df_test.drop(columns=remove_columns, errors='ignore')
-
-    feature_names = df_train.drop(columns=['product_category']).columns
-
-    #convierto a numéricas las columnas que se puedan
-    for col in feature_names:
-        df_train[col] = pd.to_numeric(df_train[col], errors='coerce')
-        df_test[col] = pd.to_numeric(df_test[col], errors='coerce')
-
-    num_cols = df_train.select_dtypes(include=[np.number]).columns.tolist()
-    cat_cols = [c for c in df_train.columns if c not in num_cols]
-
-    print("Aplicando StandardScaler a las variables numéricas...")
-    scaler = StandardScaler()
-    df_train[num_cols] = scaler.fit_transform(df_train[num_cols])
-    df_test[num_cols] = scaler.transform(df_test[num_cols])
-
-    ##1. Separar target (product_category) de features.
-    X_train = df_train[feature_names].values
-    y_train = df_train['product_category'].values
-    X_test = df_test[feature_names].values
-    y_test = df_test['product_category'].values
-
-    ##y_train e y_test contienen "A", "B" y "C". Las convierto a 0, 1 y 2
-    label_mapping = {'A': 0, 'B': 1, 'C': 2}
-    y_train = np.array([label_mapping[label] for label in y_train])
-    y_test = np.array([label_mapping[label] for label in y_test])
-
-    if apply_pca:
-        ##4. Opcional: aplicar PCA para reducir redundancia de las 4 variables altamente correlacionadas.
-        print(f"Aplicando PCA para reducir a {n_components_pca} componentes principales...")
-        pca = PCA(n_components=n_components_pca, random_state=seed)
-        X_train = pca.fit_transform(X_train)
-        X_test = pca.transform(X_test)
-        print("PCA aplicado.")
-        print("Varianza explicada por cada componente principal:", pca.explained_variance_ratio_)
-        print("Varianza total explicada por los componentes principales:", np.sum(pca.explained_variance_ratio_))
-
-    ##5. LDA para aumentar la separabilidad entre clases.
-    print("Aplicando LDA para aumentar la separabilidad entre clases...")
-    lda = LDA(n_components=2)
-    X_train_lda = lda.fit_transform(X_train, y_train)
-    X_test_lda = lda.transform(X_test)
-
-    ##scatter plot de los datos transformados por LDA. Mapa de colores por clase
-    plt.figure(figsize=(8, 6))
-    scatter = plt.scatter(X_train_lda[:, 0], X_train_lda[:, 1], c=y_train, cmap='Set1', edgecolors='k', s=100, alpha=0.7)
-    if apply_pca:
-        plt.title('Datos de Entrenamiento transformados por PCA + LDA')
-    else:
-        plt.title('Datos de Entrenamiento transformados por LDA (sin PCA)')
-    plt.xlabel('Componente LDA 1')
-    plt.ylabel('Componente LDA 2')
-    plt.colorbar(scatter, label='Categoría de Producto')
-    if show_plots:
-        plt.show()
-
-    if return_data:
-        return X_train_lda, y_train, X_test_lda, y_test
-
-# remove_columns = ["product_length_cm","packaging_width_cm"]
-# processSegmenDataset(n_components_pca=2, apply_pca=True, seed=42, show_plots=True, remove_columns=[])
-# processSegmentedDataset_v2(seed=42, show_plots=True)
-
-
 
 ## ************************************************************************************************************************
 ## PARTE 3
@@ -1140,9 +966,8 @@ def basicAnalysisSegmentedDataset(test_size = 0.2, pairplot_height=2):
     # plt.tight_layout()
     plt.show()
 
-def processSegmentedDataset(test_size = 0.2, pairplot_height=2, features_selected = None,
-                            apply_pca = True, n_components_pca = 2, use_product_category = True,
-                            show_stats = False, return_data = False):
+def processSegmentedDataset(apply_pca = True, n_components_pca = 2, use_product_category = True,
+                            features_selected = None, show_stats = True, return_data = False, test_size = 0.2):
     df_train, df_test = loadSegmentedData(test_size=test_size)
     ##quito filas Outlier de la columna product_category
     df_train = df_train[df_train['product_category'] != "Outlier"]
@@ -1220,9 +1045,8 @@ def processSegmentedDataset(test_size = 0.2, pairplot_height=2, features_selecte
 
 # X_train, y_train, X_test, y_test = processSegmentedDataset(apply_pca=True,return_data=True, show_stats=True, use_product_category=False)
 
-def predictSalesVelocity(test_size = 0.2, features_selected = None,
-                            apply_pca = True, n_components_pca = 2,
-                            use_product_category = True):
+def predictSalesVelocity(apply_pca = True, n_components_pca = 2, use_product_category = True,
+                         features_selected = None, test_size = 0.2):
 
     X_train, y_train, X_test, y_test, sales_scaler = processSegmentedDataset(test_size = test_size,
                                                                              features_selected = features_selected,
@@ -1276,5 +1100,175 @@ def predictSalesVelocity(test_size = 0.2, features_selected = None,
         plt.legend()
         plt.show()
 
-# features_selected = ["product_length_cm","shelf_presence_score"]
-# predictSalesVelocity(apply_pca=False, use_product_category=False, n_components_pca=2, features_selected=features_selected)
+### ***********************************************************************************************************************
+## PARTE 4
+
+def loadSegmentedData_v2(test_size=0.3, seed=42):
+    try:
+        df = pd.read_csv('cdan//datos//Producto_Dataset_Segmentado.csv')
+    except Exception as e:
+        df = pd.read_csv('datos\\Producto_Dataset_Segmentado.csv')
+    
+    # Dividir en características y etiquetas
+    X = df.drop(columns=['product_category']).values
+    y = df['product_category'].values
+    # Dividir en conjuntos de entrenamiento y prueba
+    X_train, X_test, y_train, y_test = train_test_split(X, y
+                                                    , test_size=test_size, random_state=seed, stratify=y)
+    
+    feature_names = df.drop(columns=['product_category']).columns
+
+    df_train = pd.DataFrame(X_train, columns=feature_names)
+    df_train['product_category'] = y_train
+    df_test = pd.DataFrame(X_test, columns=feature_names)
+    df_test['product_category'] = y_test
+
+    ##drop columna product_id
+    if 'product_id' in df_train.columns:
+        df_train = df_train.drop(columns=['product_id'])
+        df_test = df_test.drop(columns=['product_id'])
+
+    return df_train, df_test
+
+def basicAnalysisSegmentedDataset_v2(pairplot_height=2): 
+    df_train, df_test = loadSegmentedData_v2()
+    ##quito filas Outlier de la columna product_category
+    df_train = df_train[df_train['product_category'] != "Outlier"]
+    df_test = df_test[df_test['product_category'] != "Outlier"]
+
+    feature_names = df_train.drop(columns=['product_category']).columns
+    #convierto a numéricas las columnas que se puedan
+    for col in feature_names:
+        df_train[col] = pd.to_numeric(df_train[col], errors='coerce')
+        df_test[col] = pd.to_numeric(df_test[col], errors='coerce')
+
+    num_cols = df_train.select_dtypes(include=[np.number]).columns.tolist()
+    cat_cols = [c for c in df_train.columns if c not in num_cols]
+
+    print("************************************************************************")
+    print("Categorías de productos en el dataset segmentado:")
+    ##cantidad por clase
+    class_counts = df_train['product_category'].value_counts(dropna=False).rename_axis('product_category').reset_index(name='count')
+    print("************************************************************************",end="\n\n")
+
+    print("************************************************************************")
+    print("Estadísticas descriptivas del dataset segmentado:")
+    print(df_train[num_cols].describe().T)
+    print("************************************************************************",end="\n\n")
+
+    # Skewness/Kurtosis
+    sk_kurt = pd.DataFrame({
+        'skew': df_train[num_cols].skew(numeric_only=True),
+        'kurtosis': df_train[num_cols].kurtosis(numeric_only=True)
+    }).sort_values('skew', key=lambda s: s.abs(), ascending=False)
+
+    print("************************************************************************")
+    print("Skewness y Kurtosis del dataset segmentado:")
+    print(sk_kurt)
+    print("************************************************************************",end="\n\n")
+
+    ##heatmap de la correlación entre las variables numéricas
+    plt.figure(figsize=(8, 6))
+    corr = df_train[num_cols].corr(numeric_only=True)
+    sns.heatmap(corr, annot=True, fmt=".2f", cmap="RdYlGn", square=True, cbar_kws={"shrink": .8})
+    plt.title("Matriz de correlación del dataset segmentado")
+    #ponto etiquetas del eje x en 45 grados
+    plt.xticks(rotation=45, ha='right')
+    # plt.show()
+
+    p = sns.pairplot(df_train[num_cols + ['product_category']], hue='product_category',
+                     diag_kind='kde', markers=["o", "s", "D"], palette='Set1',height=pairplot_height, aspect=1.2)
+    # Rotar solo las labels (nombres de variables) en los ejes
+    for ax in p.axes[-1, :]:  # última fila → etiquetas del eje x
+        ax.set_xlabel(ax.get_xlabel(),fontsize=9)
+
+    for ax in p.axes[:, 0]:  # primera columna → etiquetas del eje y
+        ax.set_ylabel(ax.get_ylabel(), fontsize=9)
+
+    plt.suptitle('Gráfico de dispersión y KDE del conjunto de datos segmentado', y=1.02)
+    # plt.tight_layout()
+    plt.show()
+
+def processSegmenDataset_v2(apply_pca = False, n_components_pca = 2, return_data = False, seed=42,
+                            show_plots = True, remove_columns = []):
+    """
+    Función para aplicar procesamiento al dataset segmentado.
+
+    1. Separar target (product_category) de features.
+    2. Imputación: no hay faltantes → se omite.
+    3. Escalado: aplicar StandardScaler sobre todas las numéricas.
+    4. Opcional: aplicar PCA para reducir redundancia de las 4 variables altamente correlacionadas.
+    5. LDA: usarlo tanto como clasificador directo como transformador supervisado (máx. 2 dimensiones para A/B/C).
+    """
+
+    df_train, df_test = loadSegmentedData_v2(seed=seed)
+    ##quito filas Outlier de la columna product_category
+    df_train = df_train[df_train['product_category'] != "Outlier"]
+    df_test = df_test[df_test['product_category'] != "Outlier"]
+
+    #remuevo las columnas que se pidan
+    if remove_columns:
+        df_train = df_train.drop(columns=remove_columns, errors='ignore')
+        df_test = df_test.drop(columns=remove_columns, errors='ignore')
+
+    feature_names = df_train.drop(columns=['product_category']).columns
+
+    #convierto a numéricas las columnas que se puedan
+    for col in feature_names:
+        df_train[col] = pd.to_numeric(df_train[col], errors='coerce')
+        df_test[col] = pd.to_numeric(df_test[col], errors='coerce')
+
+    num_cols = df_train.select_dtypes(include=[np.number]).columns.tolist()
+    cat_cols = [c for c in df_train.columns if c not in num_cols]
+
+    print("Aplicando StandardScaler a las variables numéricas...")
+    scaler = StandardScaler()
+    df_train[num_cols] = scaler.fit_transform(df_train[num_cols])
+    df_test[num_cols] = scaler.transform(df_test[num_cols])
+
+    ##1. Separar target (product_category) de features.
+    X_train = df_train[feature_names].values
+    y_train = df_train['product_category'].values
+    X_test = df_test[feature_names].values
+    y_test = df_test['product_category'].values
+
+    ##y_train e y_test contienen "A", "B" y "C". Las convierto a 0, 1 y 2
+    label_mapping = {'A': 0, 'B': 1, 'C': 2}
+    y_train = np.array([label_mapping[label] for label in y_train])
+    y_test = np.array([label_mapping[label] for label in y_test])
+
+    if apply_pca:
+        ##4. Opcional: aplicar PCA para reducir redundancia de las 4 variables altamente correlacionadas.
+        print(f"Aplicando PCA para reducir a {n_components_pca} componentes principales...")
+        pca = PCA(n_components=n_components_pca, random_state=seed)
+        X_train = pca.fit_transform(X_train)
+        X_test = pca.transform(X_test)
+        print("PCA aplicado.")
+        print("Varianza explicada por cada componente principal:", pca.explained_variance_ratio_)
+        print("Varianza total explicada por los componentes principales:", np.sum(pca.explained_variance_ratio_))
+
+    ##5. LDA para aumentar la separabilidad entre clases.
+    print("Aplicando LDA para aumentar la separabilidad entre clases...")
+    lda = LDA(n_components=2)
+    X_train_lda = lda.fit_transform(X_train, y_train)
+    X_test_lda = lda.transform(X_test)
+
+    ##scatter plot de los datos transformados por LDA. Mapa de colores por clase
+    plt.figure(figsize=(8, 6))
+    scatter = plt.scatter(X_train_lda[:, 0], X_train_lda[:, 1], c=y_train, cmap='Set1', edgecolors='k', s=100, alpha=0.7)
+    if apply_pca:
+        plt.title('Datos de Entrenamiento transformados por PCA + LDA')
+    else:
+        plt.title('Datos de Entrenamiento transformados por LDA (sin PCA)')
+    plt.xlabel('Componente LDA 1')
+    plt.ylabel('Componente LDA 2')
+    plt.colorbar(scatter, label='Categoría de Producto')
+    if show_plots:
+        plt.show()
+
+    if return_data:
+        return X_train_lda, y_train, X_test_lda, y_test
+    
+# loadSegmentedData_v2()
+# basicAnalysisSegmentedDataset_v2()
+# processSegmenDataset_v2(apply_pca = True, n_components_pca = 2)
