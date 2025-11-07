@@ -356,6 +356,8 @@ def realdataWithDendo(columnasInteres = ["media_visitas_diarias","unidades_vendi
             # Sin colores (todo en negro)
             dendrogram(Z, color_threshold=0, above_threshold_color="black")
             plt.title("Dendrograma sin línea de corte")
+            #agrego grilla sólo para eje y
+            plt.grid(axis='y')
         else:
             # Colores por debajo del umbral; por encima, color fijo
             dendrogram(Z, color_threshold=umbral_corte,
@@ -368,7 +370,8 @@ def realdataWithDendo(columnasInteres = ["media_visitas_diarias","unidades_vendi
 
         plt.xlabel("Muestras")
         plt.ylabel("Distancia")
-        # plt.grid()
+        plt.grid()
+
 
     if show_real_data and show_dendo:
         fig, axes = plt.subplots(1, 2, figsize=(16, 6))
@@ -401,6 +404,7 @@ def realdataWithDendo(columnasInteres = ["media_visitas_diarias","unidades_vendi
             # Sin colores (todo en negro)
             dendrogram(Z, color_threshold=0, above_threshold_color="black")
             axes[1].set_title("Dendrograma para datos reales (sin línea de corte)")
+            plt.grid(axis='y')
         else:
             # Colores por debajo del umbral; por encima, color fijo
             dendrogram(Z, color_threshold=umbral_corte,
