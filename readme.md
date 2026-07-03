@@ -1,4 +1,4 @@
-# Repositorio para el curso *Ciencia de Datos aplicada a los Negocios*
+# Repositorio para el curso *Machine Learning No Supervisado*
 
 ## Disclaimer
 
@@ -10,5 +10,6 @@ Este material es para fines educativos y no debe ser utilizado para fines comerc
 - [x] Intro al Aprendizaje No Supervisado (ANS)
 - [x] Algoritmos básicos de clustering
 - [x] Algoritmos avanzados de clustering
-- [ ] Reducción de dimensionalidad
-- [ ] Aplicación de ANS y AS a un problema real.
+- [x] Reducción de dimensionalidad
+- [x] Detección de anomalías y valores atípicos.
+- [x] Aplicación de ANS y AS a un problema real.
