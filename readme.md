@@ -11,5 +11,5 @@ Este material es para fines educativos y no debe ser utilizado para fines comerc
 - [x] Algoritmos básicos de clustering
 - [x] Algoritmos avanzados de clustering
 - [x] Reducción de dimensionalidad
-- [x] Detección de anomalías y valores atípicos.
+- [ ] Detección de anomalías y valores atípicos.
 - [x] Aplicación de ANS y AS a un problema real.
