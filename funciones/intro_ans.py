@@ -197,7 +197,7 @@ def makeKmeansAndPlot(data, n_clusters=3, col1="media_visitas_diarias", col2="pr
     data["cluster"] = kmeans.fit_predict(data[[col1, col2]])
 
     plt.figure(figsize=figsize)
-    sns.scatterplot(data=data, x=col1, y=col2, hue="cluster", palette="Set1", s=100, alpha=0.7)
+    sns.scatterplot(data=data, x=col1, y=col2, hue="cluster", palette="viridis", s=100, alpha=0.7)
     if centroides:
         centroids = kmeans.cluster_centers_
         plt.scatter(centroids[:, 0], centroids[:, 1], c='black', s=200, marker='X', label='Centroides')
@@ -218,7 +218,7 @@ def showCirclesWithKmeans(n_samples=1000, noise=0.05, factor=0.5, random_state=4
     ##genero gráfico de dos columnas. En la primer columna muestro los originales, y en la segunda los datos pero pintados en base
     #a las etiquetas de K-means
     fig, axes = plt.subplots(1, 2, figsize=figsize)
-    axes[0].scatter(X[:, 0], X[:, 1], color="#1124fa", s=50, alpha=0.7)
+    axes[0].scatter(X[:, 0], X[:, 1], color="#1157fa", s=50, alpha=0.7)
     axes[0].set_title("Datos Originales")   
     axes[0].set_xlabel("Feature 1")
     axes[0].set_ylabel("Feature 2")
@@ -243,7 +243,7 @@ def showCirclesWithDBSCAN(n_samples=1000, noise=0.05, factor=0.5, random_state=4
     # Genero gráfico de dos columnas. En la primer columna muestro los originales, y en la segunda los datos pero pintados en base
     # a las etiquetas de DBSCAN
     fig, axes = plt.subplots(1, 2, figsize=figsize)
-    axes[0].scatter(X[:, 0], X[:, 1], color="#1124fa", s=50, alpha=0.7)
+    axes[0].scatter(X[:, 0], X[:, 1], color="#1157fa", s=50, alpha=0.7)
     axes[0].set_title("Datos Originales")   
     axes[0].set_xlabel("Feature 1")
     axes[0].set_ylabel("Feature 2")
@@ -281,19 +281,19 @@ def clustersWithMetrics(n_samples=1000, centers=4, cluster_std=1.5, random_state
 
     # Evaluar diferentes valores de k
     for i, k in enumerate(k_values):
-        kmeans = KMeans(n_clusters=k, random_state=random_state)
+        kmeans = KMeans(n_clusters=k, random_state=random_state, n_init=10)
         labels = kmeans.fit_predict(X)
 
         sil_score = silhouette_score(X, labels)
         db_score = davies_bouldin_score(X, labels)
 
-        axs[i].scatter(X[:, 0], X[:, 1], c=labels, s=30, cmap='Accent', edgecolor='k', alpha=0.8)
+        axs[i].scatter(X[:, 0], X[:, 1], c=labels, s=30, cmap='viridis', edgecolor='k', alpha=0.7)
         axs[i].set_title(f"Silueta = {sil_score:.2f}\nDavies-Bouldin = {db_score:.2f}\nK = {k}")
         axs[i].set_xticks([])
         axs[i].set_yticks([])
 
     # Añadir una caja alrededor del mejor resultado (opcional)
-    best_k_index = np.argmax([silhouette_score(X, KMeans(n_clusters=k, random_state=random_state).fit_predict(X)) for k in k_values])
+    best_k_index = np.argmax([silhouette_score(X, KMeans(n_clusters=k, random_state=random_state, n_init=10).fit_predict(X)) for k in k_values])
     # axs[best_k_index].patch.set_edgecolor('magenta')
     axs[best_k_index].patch.set_linewidth(4)
 
