@@ -2,9 +2,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.decomposition import PCA
-from sklearn.preprocessing import OrdinalEncoder # to encode categorical v
+import os
+import shutil
+import tarfile
+from sklearn.datasets import fetch_lfw_people, fetch_olivetti_faces, get_data_home
+from sklearn.preprocessing import OrdinalEncoder
 import pandas as pd
-import plotly.express as px # for data visualization
+import plotly.express as px 
 from sklearn.preprocessing import StandardScaler
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.svm import SVC
@@ -882,3 +886,401 @@ def gettingFeaturesImportanceFromPCA(n_components=2, figsize=(9, 3.6),cmap="Reds
             plt.text(j, i, f"{vals[i, j]:.2f}", ha="center", va="center", fontsize=12)
     plt.tight_layout()
     plt.show()
+
+def _limpiarCacheLFW(data_home=None, verbose=True):
+    """
+    Borra la carpeta ``lfw_home`` de la caché de scikit-learn.
+
+    Se usa cuando la descarga del dataset quedó incompleta (el archivo .tgz truncado
+    hace fallar la descompresión con un EOFError). Después de limpiar, scikit-learn
+    vuelve a descargar el dataset desde cero.
+    """
+
+    lfw_home = os.path.join(get_data_home(data_home=data_home), "lfw_home")
+    if os.path.isdir(lfw_home):
+        shutil.rmtree(lfw_home, ignore_errors=True)
+        if verbose:
+            print(f"Caché de LFW eliminada: {lfw_home}")
+    elif verbose:
+        print(f"No había caché de LFW para eliminar en: {lfw_home}")
+
+
+def loadFaces(dataset="olivetti", seed=0, shuffle=True, min_faces_per_person=70,
+              resize=0.4, funneled=True, color=False, data_home=None, verbose=True,
+              force_download=False):
+    """
+    Descarga (o carga desde la caché local) un dataset de caras.
+
+    Hay dos opciones:
+
+    - ``"olivetti"`` (por defecto): *Olivetti faces* (AT&T), 400 imágenes de 64x64 de
+      40 personas. Pesa ~15MB y es el dataset que usa el ejemplo de scikit-learn
+      "Faces dataset decompositions". Es el recomendado para la clase: descarga rápida.
+    - ``"lfw"``: *Labeled Faces in the Wild*, caras reales tomadas de noticias.
+      Es mucho más pesado (~233MB la primera vez) pero más "realista".
+
+    Parámetros
+    ----------
+    dataset : str
+        "olivetti" o "lfw".
+    seed : int
+        Semilla para el mezclado de las imágenes (el ejemplo de scikit-learn usa 0).
+    shuffle : bool
+        Mezcla las imágenes al cargarlas, para que las caras no queden ordenadas
+        por persona.
+    min_faces_per_person : int
+        Sólo para LFW: se conservan las personas con al menos esta cantidad de fotos.
+        Valores más chicos => más personas y más imágenes (dataset más pesado).
+    resize : float
+        Sólo para LFW: factor de escalado. 0.4 => imágenes de 50x37 píxeles.
+    funneled : bool
+        Sólo para LFW: usa la versión alineada ("funneled") de las imágenes.
+    color : bool
+        Sólo para LFW: si es True devuelve las imágenes en RGB, si no en escala de grises.
+    data_home : str o None
+        Carpeta donde guardar/buscar los datos descargados.
+    verbose : bool
+        Imprime un resumen del dataset cargado.
+    force_download : bool
+        Sólo para LFW: borra la caché y vuelve a descargar todo desde cero.
+        Útil cuando una descarga previa quedó incompleta.
+
+    Retorna
+    -------
+    dict con las claves:
+        X            : matriz (n_muestras, n_features) con cada cara "aplanada".
+        X_centered   : X con centrado global (por píxel) y local (por imagen),
+                       tal como se hace en el ejemplo de scikit-learn.
+        y            : etiquetas (índice de la persona).
+        target_names : nombres de las personas.
+        images       : imágenes con su forma original (n_muestras, alto, ancho).
+        image_shape  : tupla (alto, ancho) de cada imagen.
+        n_samples, n_features, n_classes : tamaños del dataset.
+        nombre       : nombre del dataset cargado.
+    """
+
+    dataset = dataset.lower()
+
+    if dataset == "olivetti":
+        rng = np.random.RandomState(seed)
+        faces = fetch_olivetti_faces(shuffle=shuffle, random_state=rng, data_home=data_home)
+        # Olivetti no trae nombres: las personas se identifican por un número.
+        target_names = np.array([f"Persona {i}" for i in range(faces.target.max() + 1)])
+        nombre = "Olivetti faces"
+
+    elif dataset == "lfw":
+        if force_download:
+            _limpiarCacheLFW(data_home, verbose=verbose)
+
+        try:
+            faces = fetch_lfw_people(min_faces_per_person=min_faces_per_person, resize=resize,
+                                     funneled=funneled, color=color, data_home=data_home)
+        except (EOFError, tarfile.ReadError, OSError) as error:
+            # Típicamente pasa cuando la descarga (~233MB) se corta y el .tgz queda truncado.
+            print(f"La descarga anterior de LFW quedó incompleta o corrupta ({type(error).__name__}: {error}).")
+            print("Limpiando la caché y reintentando la descarga...")
+            _limpiarCacheLFW(data_home, verbose=verbose)
+            faces = fetch_lfw_people(min_faces_per_person=min_faces_per_person, resize=resize,
+                                     funneled=funneled, color=color, data_home=data_home)
+
+        target_names = faces.target_names
+        nombre = "Labeled Faces in the Wild (LFW)"
+
+    else:
+        raise ValueError(f"dataset debe ser 'olivetti' o 'lfw', se recibió '{dataset}'")
+
+    X = faces.data.astype(np.float64)
+    y = faces.target
+    images = faces.images
+    n_samples, n_features = X.shape
+    image_shape = images.shape[1:]
+
+    if dataset == "lfw" and shuffle:
+        rng = np.random.RandomState(seed)
+        orden = rng.permutation(n_samples)
+        X, y, images = X[orden], y[orden], images[orden]
+
+    # Centrado global: a cada píxel le resto su valor promedio en todo el dataset.
+    X_centered = X - X.mean(axis=0)
+    # Centrado local: a cada imagen le resto su propio brillo promedio.
+    X_centered -= X_centered.mean(axis=1).reshape(n_samples, -1)
+
+    data = {"X": X,
+            "X_centered": X_centered,
+            "y": y,
+            "target_names": target_names,
+            "images": images,
+            "image_shape": image_shape,
+            "n_samples": n_samples,
+            "n_features": n_features,
+            "n_classes": len(target_names),
+            "nombre": nombre}
+
+    if verbose:
+        print(f"Dataset '{nombre}' cargado:")
+        print(f" - Imágenes: {n_samples}")
+        print(f" - Tamaño de cada imagen: {image_shape[0]}x{image_shape[1]} = {n_features} features")
+        print(f" - Personas distintas: {data['n_classes']}")
+
+    return data
+
+
+def _facesGallery(images, image_shape, titles=None, n_row=2, n_col=3, cmap="gray",
+                  figsize=None, title=None, fontsize=16, titles_fontsize=9,
+                  symmetric_scale=True, show_colorbar=True):
+    """
+    Helper interno: dibuja una grilla de caras.
+
+    Replica la función ``plot_gallery()`` del ejemplo de scikit-learn
+    "Faces dataset decompositions": escala de grises simétrica alrededor de 0,
+    ejes apagados y una barra de color horizontal debajo de la grilla.
+    """
+
+    if figsize is None:
+        figsize = (2.0 * n_col, 2.3 * n_row)
+
+    fig, axs = plt.subplots(nrows=n_row, ncols=n_col, figsize=figsize,
+                            facecolor="white", constrained_layout=True)
+    axs = np.atleast_1d(axs)
+    try:
+        fig.get_layout_engine().set(w_pad=0.01, h_pad=0.02, hspace=0, wspace=0)
+    except AttributeError:
+        # matplotlib < 3.6 usa otra API para ajustar el constrained_layout
+        fig.set_constrained_layout_pads(w_pad=0.01, h_pad=0.02, hspace=0, wspace=0)
+    fig.set_edgecolor("black")
+    if title is not None:
+        fig.suptitle(title, size=fontsize)
+
+    im = None
+    for i, ax in enumerate(axs.flat):
+        if i >= len(images):
+            ax.axis("off")
+            continue
+        vec = images[i]
+        if symmetric_scale:
+            # escala simétrica alrededor de 0: así se ven las caras en el ejemplo
+            vmax = max(vec.max(), -vec.min())
+            im = ax.imshow(vec.reshape(image_shape), cmap=cmap, interpolation="nearest",
+                           vmin=-vmax, vmax=vmax)
+        else:
+            im = ax.imshow(vec.reshape(image_shape), cmap=cmap, interpolation="nearest")
+        ax.axis("off")
+        if titles is not None and i < len(titles):
+            ax.set_title(titles[i], fontsize=titles_fontsize)
+
+    if show_colorbar and im is not None:
+        fig.colorbar(im, ax=axs, orientation="horizontal", shrink=0.99, aspect=40, pad=0.01)
+
+    plt.show()
+
+
+def plotSomeFaces(faces, n_row=2, n_col=3, cmap="gray", figsize=None,
+                  title="Caras del dataset", seed=42, random=False,
+                  use_centered=True, show_names=False, show_colorbar=True,
+                  fontsize=16, titles_fontsize=9):
+    """
+    Grafica una grilla de caras del dataset devuelto por ``loadFaces()``.
+
+    Con los valores por defecto reproduce la figura "Faces from dataset" del ejemplo
+    de scikit-learn: las primeras 6 caras ya centradas, en escala de grises simétrica
+    y con barra de color.
+
+    Parámetros
+    ----------
+    faces : dict
+        Dataset devuelto por ``loadFaces()``.
+    n_row, n_col : int
+        Cantidad de filas y columnas de la grilla (se muestran n_row*n_col caras).
+    cmap : str
+        Mapa de colores de matplotlib ("gray", "Blues", "magma", etc.).
+    figsize : tupla o None
+        Tamaño de la figura. Si es None se calcula a partir de n_row y n_col.
+    title : str o None
+        Título general de la figura.
+    seed : int
+        Semilla para la selección aleatoria de caras (sólo si random=True).
+    random : bool
+        Si es True elige caras al azar, si es False toma las primeras del dataset
+        (como en el ejemplo de scikit-learn).
+    use_centered : bool
+        Si es True grafica las imágenes centradas (X_centered), como en el ejemplo.
+        Si es False grafica las imágenes originales.
+    show_names : bool
+        Muestra el nombre de la persona arriba de cada cara (útil con LFW).
+    show_colorbar : bool
+        Agrega la barra de color horizontal debajo de la grilla.
+    fontsize, titles_fontsize : int
+        Tamaño de fuente del título general y de los títulos de cada cara.
+    """
+
+    np.random.seed(seed)
+
+    X = faces["X_centered"] if use_centered else faces["X"]
+    n_faces = min(n_row * n_col, faces["n_samples"])
+
+    if random:
+        indices = np.random.choice(faces["n_samples"], size=n_faces, replace=False)
+    else:
+        indices = np.arange(n_faces)
+
+    titles = None
+    if show_names:
+        titles = [faces["target_names"][faces["y"][i]] for i in indices]
+
+    _facesGallery(X[indices], faces["image_shape"], titles=titles, n_row=n_row, n_col=n_col,
+                  cmap=cmap, figsize=figsize, title=title, fontsize=fontsize,
+                  titles_fontsize=titles_fontsize, symmetric_scale=use_centered,
+                  show_colorbar=show_colorbar)
+
+
+def plotEigenfaces(faces, n_row=2, n_col=3, cmap="gray", figsize=None,
+                   title="Eigenfaces - PCA usando SVD randomizado", whiten=True,
+                   seed=0, fontsize=16, show_colorbar=True, return_pca=False):
+    """
+    Ajusta PCA sobre las caras centradas y grafica las primeras componentes
+    principales como imágenes: las famosas *eigenfaces*.
+
+    Reproduce la figura "Eigenfaces - PCA using randomized SVD" del ejemplo de
+    scikit-learn. Cada eigenface es una "dirección" del espacio de caras: sumándolas
+    con distintos pesos se puede reconstruir cualquier cara del dataset.
+
+    Parámetros
+    ----------
+    faces : dict
+        Dataset devuelto por ``loadFaces()``.
+    n_row, n_col : int
+        Grilla de eigenfaces a mostrar (se ajustan n_row*n_col componentes).
+    cmap, figsize, title, fontsize, show_colorbar
+        Igual que en ``plotSomeFaces()``.
+    whiten : bool
+        Parámetro ``whiten`` de PCA (el ejemplo de scikit-learn usa True).
+    seed : int
+        Semilla del solver randomizado.
+    return_pca : bool
+        Si es True devuelve el objeto PCA ya ajustado.
+    """
+
+    n_components = n_row * n_col
+
+    pca = PCA(n_components=n_components, svd_solver="randomized", whiten=whiten,
+              random_state=seed)
+    pca.fit(faces["X_centered"])
+
+    _facesGallery(pca.components_[:n_components], faces["image_shape"],
+                  titles=[f"PC{i+1}" for i in range(n_components)],
+                  n_row=n_row, n_col=n_col, cmap=cmap, figsize=figsize, title=title,
+                  fontsize=fontsize, symmetric_scale=True, show_colorbar=show_colorbar)
+
+    if return_pca:
+        return pca
+
+
+def plotFaceReconstruction(faces, num_components=50, nfaces_to_show=5, cmap="gray",
+                           figsize=None, seed=42, title=None, show_eigenfaces=False,
+                           show_names=False, verbose=True, return_pca=False):
+    """
+    Aplica PCA sobre el dataset de caras y compara las caras originales contra su
+    reconstrucción usando sólo ``num_components`` componentes principales.
+
+    Es el análogo de ``plotDigitReconstruction()`` pero con caras, y sirve para mostrar
+    cómo PCA comprime la información: con unos pocos cientos de números se puede
+    reconstruir una imagen de miles de píxeles.
+
+    Parámetros
+    ----------
+    faces : dict
+        Dataset devuelto por ``loadFaces()``.
+    num_components : int o None
+        Cantidad de componentes principales a retener. Si es None usa todas las posibles.
+    nfaces_to_show : int
+        Cantidad de caras a mostrar (columnas de la figura).
+    cmap : str
+        Mapa de colores de matplotlib.
+    figsize : tupla o None
+        Tamaño de la figura. Si es None se calcula según la cantidad de caras y filas.
+    seed : int
+        Semilla para elegir las caras a mostrar.
+    title : str o None
+        Título general. Si es None se arma uno automáticamente.
+    show_eigenfaces : bool
+        Agrega una tercera fila con las primeras "eigenfaces" (componentes principales).
+    show_names : bool
+        Muestra el nombre de la persona sobre cada cara original (útil con LFW).
+    verbose : bool
+        Imprime la varianza explicada y el factor de compresión logrado.
+    return_pca : bool
+        Si es True devuelve el objeto PCA ya ajustado.
+    """
+
+    np.random.seed(seed)
+
+    X = faces["X"]
+    image_shape = faces["image_shape"]
+    n_samples, n_features = X.shape
+
+    if num_components is None:
+        num_components = min(n_samples, n_features)
+    num_components = int(min(num_components, n_samples, n_features))
+
+    pca = PCA(n_components=num_components, svd_solver="randomized", random_state=seed)
+    X_proyectado = pca.fit_transform(X)
+    X_reconstructed = pca.inverse_transform(X_proyectado)
+
+    nfaces_to_show = min(nfaces_to_show, n_samples)
+    if show_eigenfaces:
+        nfaces_to_show = min(nfaces_to_show, num_components)
+    selected_indices = np.random.choice(n_samples, size=nfaces_to_show, replace=False)
+
+    n_row = 3 if show_eigenfaces else 2
+    if figsize is None:
+        figsize = (2.2 * nfaces_to_show, 2.6 * n_row)
+    fig, axes = plt.subplots(n_row, nfaces_to_show, figsize=figsize, facecolor="white")
+    axes = np.atleast_2d(axes)
+
+    for i, idx in enumerate(selected_indices):
+        axes[0, i].imshow(X[idx].reshape(image_shape), cmap=cmap, interpolation="nearest")
+        axes[0, i].set_xticks([])
+        axes[0, i].set_yticks([])
+        if show_names:
+            axes[0, i].set_title(faces["target_names"][faces["y"][idx]], fontsize=9)
+        if i == 0:
+            axes[0, i].set_ylabel(f"Original\nN=({n_features})", fontsize=13)
+
+        axes[1, i].imshow(X_reconstructed[idx].reshape(image_shape), cmap=cmap,
+                          interpolation="nearest")
+        axes[1, i].set_xticks([])
+        axes[1, i].set_yticks([])
+        if i == 0:
+            axes[1, i].set_ylabel(f"Reconstruido\nK=({num_components} PCs)", fontsize=13)
+
+    if show_eigenfaces:
+        for i in range(nfaces_to_show):
+            eigenface = pca.components_[i]
+            vmax = max(eigenface.max(), -eigenface.min())
+            axes[2, i].imshow(eigenface.reshape(image_shape), cmap=cmap,
+                              interpolation="nearest", vmin=-vmax, vmax=vmax)
+            axes[2, i].set_xticks([])
+            axes[2, i].set_yticks([])
+            axes[2, i].set_title(f"PC{i+1}", fontsize=9)
+            if i == 0:
+                axes[2, i].set_ylabel("Eigenfaces", fontsize=13)
+
+    if title is None:
+        title = f"Reconstrucción de caras usando {num_components} componentes principales"
+    plt.suptitle(title, fontsize=16)
+    plt.tight_layout()
+    plt.show()
+
+    if verbose:
+        var_explicada = pca.explained_variance_ratio_.sum() * 100
+        print(f"Componentes usadas: {num_components} de {n_features} features originales")
+        print(f"Varianza explicada acumulada: {var_explicada:.2f}%")
+        print(f"Compresión: {n_features / num_components:.1f}x menos números por imagen")
+
+    if return_pca:
+        return pca
+
+# data = loadFaces()
+# plotSomeFaces(data)
+# plotEigenfaces(data)
+# plotFaceReconstruction(data, num_components=200)
