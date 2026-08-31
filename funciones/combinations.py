@@ -16,7 +16,7 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.datasets import load_wine, load_iris
 from sklearn.model_selection import train_test_split
 from scipy.cluster.hierarchy import dendrogram, linkage
-from sklearn.metrics import silhouette_score, davies_bouldin_score
+from sklearn.metrics import silhouette_score, davies_bouldin_score, adjusted_rand_score
 from scipy.optimize import linear_sum_assignment
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.linear_model import LinearRegression
@@ -86,6 +86,382 @@ def pairPlotofWine(features=None, figsize=(10, 10)):
 
     plt.suptitle('Gráfico de dispersión y KDE del conjunto de datos de Wine', y=1.02)
     plt.show()
+
+def pairPlotofHousing(features=None, figsize=(10, 10), muestra=2000, seed=42,
+                      usar_ratios=False, diag_kind="hist", color="#3A40A2",
+                      mostrar_rangos=True):
+    """Pairplot del conjunto California housing, análogo a pairPlotofWine().
+
+    A diferencia de wine, acá no se distinguen categorías: todos los distritos se grafican con
+    el mismo color. El objetivo es ver el rango y la dispersión que toma cada variable numérica,
+    algo necesario antes de estandarizar o de aplicar K-means.
+
+    Parámetros
+    ----------
+    features : list o None
+        Nombres de columnas a graficar. Si es None se usa un subconjunto propuesto.
+    figsize : tuple
+        Tamaño de la figura.
+    muestra : int o None
+        Cantidad de distritos a graficar. El conjunto tiene 20.640 filas: un pairplot completo
+        resulta lento e ilegible, por eso se toma una muestra aleatoria. Con None se usan todos.
+        El resumen de rangos siempre se calcula sobre el conjunto completo.
+    seed : int
+        Semilla del muestreo.
+    usar_ratios : bool
+        Si True agrega `hab_por_hogar`, `dorm_por_hab` y `pers_por_hogar` como columnas elegibles.
+    diag_kind : str
+        Tipo de gráfico en la diagonal ("hist" muestra mejor el rango; "kde" lo suaviza).
+    color : str
+        Color de los puntos y de la diagonal.
+    mostrar_rangos : bool
+        Si True imprime mínimo, máximo, media, mediana y desvío de cada variable graficada.
+    """
+    df, _, _ = _prepararDatosHousing(usar_ratios)
+
+    if features is None:
+        cols_propuestas = ["median_income", "housing_median_age", "total_rooms",
+                           "population", "median_house_value"]
+        print("No se han especificado features, se usarán las siguientes:", cols_propuestas)
+        features = cols_propuestas
+
+    ##ocean_proximity es categórica y queda fuera de un gráfico de variables numéricas
+    columnas_validas = [c for c in df.columns if c != "ocean_proximity"]
+    invalidas = [c for c in features if c not in columnas_validas]
+    if invalidas:
+        raise ValueError(f"Columnas inexistentes: {invalidas}. Disponibles: {columnas_validas}")
+
+    df = df[list(features)]
+
+    if mostrar_rangos:
+        rangos = df.agg(["min", "max", "mean", "median", "std"]).T
+        rangos.columns = ["mínimo", "máximo", "media", "mediana", "desvío"]
+        rangos["rango"] = rangos["máximo"] - rangos["mínimo"]
+        print("\nRANGO DE CADA VARIABLE (sobre los 20640 distritos)")
+        print(rangos.round(2).to_string())
+        print()
+
+    ##el conjunto tiene 20.640 filas: sin muestreo el pairplot es lento y queda saturado
+    if muestra is not None and muestra < len(df):
+        df = df.sample(n=muestra, random_state=seed)
+        print(f"Se grafica una muestra aleatoria de {muestra} distritos sobre 20640.")
+
+    sns.set_theme(style="ticks")
+    pair_plot = sns.pairplot(df, diag_kind=diag_kind, height=figsize[0] / len(features),
+                             plot_kws=dict(s=18, alpha=0.5, linewidth=0, color=color),
+                             diag_kws=dict(color=color))
+
+    pair_plot.figure.set_size_inches(figsize)
+
+    plt.suptitle("Dispersión y distribución de las variables de California housing", y=1.02)
+    plt.show()
+
+def pairPlotofHousingKmeans(k=3, features=None, features_cluster=None, figsize=(10, 10),
+                            muestra=2000, seed=42, usar_ratios=False, escalar=True,
+                            diag_kind="kde", palette="Set1", k_max=None,
+                            mostrar_tamanos=True, return_data=False):
+    """Pairplot de California housing coloreado por el grupo que asigna K-means.
+
+    Primero se ajusta K-means sobre el conjunto completo y después se grafica: cada punto se
+    pinta según su grupo, numerado 1, 2, ..., k de mayor a menor cantidad de distritos. Es la
+    versión no supervisada de pairPlotofHousing(): en vez de una clase conocida, el color sale
+    del agrupamiento.
+
+    Parámetros
+    ----------
+    k : int
+        Cantidad de grupos. Mínimo 2 y máximo 9, que es la cantidad de colores y marcadores
+        que se pueden distinguir en el gráfico (ampliable con k_max).
+    features : list o None
+        Columnas que se grafican. Si es None se usa un subconjunto propuesto.
+    features_cluster : list o None
+        Columnas con las que se calcula K-means. Si es None se usan las mismas variables que
+        interpretarClustersHousing(): con el mismo k y la misma semilla, las dos funciones
+        producen el mismo agrupamiento, y el Grupo i de acá es el Cluster i de allá.
+        Pasar una lista propia permite agrupar con un conjunto y mirar el resultado sobre otro.
+    figsize : tuple
+        Tamaño de la figura.
+    muestra : int o None
+        Cantidad de distritos a graficar. K-means siempre se ajusta sobre los 20.640 distritos;
+        el muestreo afecta únicamente al gráfico, que de otro modo queda saturado.
+    seed : int
+        Semilla de K-means y del muestreo.
+    usar_ratios : bool
+        Si True agrega `hab_por_hogar`, `dorm_por_hab` y `pers_por_hogar` como columnas elegibles.
+    escalar : bool
+        Si True (recomendado) estandariza antes de agrupar. Sin esto, las variables de mayor
+        magnitud dominan las distancias y el agrupamiento las refleja casi en exclusiva.
+    diag_kind : str
+        Tipo de gráfico en la diagonal ("kde" o "hist").
+    palette : str
+        Paleta de colores de seaborn.
+    k_max : int o None
+        Permite ampliar el tope de 9 grupos, a costa de colores más difíciles de distinguir.
+    mostrar_tamanos : bool
+        Si True informa cuántos distritos quedaron en cada grupo.
+    return_data : bool
+        Si True devuelve un diccionario con las etiquetas, los tamaños, los centroides y el modelo.
+    """
+    df, columnas_cluster, _ = _prepararDatosHousing(usar_ratios)
+
+    if features is None:
+        cols_propuestas = ["median_income", "housing_median_age", "total_rooms",
+                           "population", "median_house_value"]
+        print("No se han especificado features, se usarán las siguientes:", cols_propuestas)
+        features = cols_propuestas
+    if features_cluster is None:
+        ##por defecto agrupamos con las mismas variables que interpretarClustersHousing(), para
+        ##que con igual k y semilla las dos funciones den exactamente el mismo agrupamiento
+        features_cluster = list(columnas_cluster)
+
+    ##ocean_proximity es categórica y queda fuera de un gráfico de variables numéricas
+    columnas_validas = [c for c in df.columns if c != "ocean_proximity"]
+    invalidas = [c for c in list(features) + list(features_cluster) if c not in columnas_validas]
+    if invalidas:
+        raise ValueError(f"Columnas inexistentes: {sorted(set(invalidas))}. Disponibles: {columnas_validas}")
+
+    ##el tope no lo pone el modelo sino la lectura del gráfico: más de 9 colores no se distinguen
+    tope = 9 if k_max is None else int(k_max)
+    if isinstance(k, bool) or not isinstance(k, (int, np.integer)):
+        raise ValueError("k debe ser un número entero.")
+    if k < 2 or k > tope:
+        raise ValueError(f"k debe estar entre 2 y {tope}. Se recibió k={k}.")
+
+    ##K-means se ajusta sobre el conjunto completo, no sobre la muestra que se grafica
+    X = df[features_cluster]
+    X_modelo = StandardScaler().fit_transform(X) if escalar else X.to_numpy(dtype=float)
+
+    kmeans = KMeans(n_clusters=k, n_init=20, random_state=seed)
+    etiquetas = kmeans.fit_predict(X_modelo)
+    tamanos = np.bincount(etiquetas, minlength=k)
+
+    ##renumeramos de mayor a menor tamaño: el grupo 1 es siempre el más numeroso
+    orden = np.argsort(-tamanos)
+    remapeo = np.empty(k, dtype=int)
+    remapeo[orden] = np.arange(k)
+    etiquetas = remapeo[etiquetas]
+    tamanos = tamanos[orden]
+
+    nombres_grupos = [str(i + 1) for i in range(k)]
+    df["cluster"] = pd.Categorical([str(e + 1) for e in etiquetas], categories=nombres_grupos)
+
+    print(f"K-means con k={k} sobre {len(df)} distritos"
+          f"{' (variables estandarizadas)' if escalar else ' (sin estandarizar)'}")
+    print(f"Variables usadas para agrupar: {', '.join(features_cluster)}")
+    if mostrar_tamanos:
+        for i in range(k):
+            print(f"  Grupo {i + 1}: {tamanos[i]} distritos ({100 * tamanos[i] / len(df):.1f}%)")
+
+    graficar = df[list(features) + ["cluster"]]
+
+    ##el conjunto tiene 20.640 filas: sin muestreo el pairplot es lento y queda saturado
+    if muestra is not None and muestra < len(graficar):
+        graficar = graficar.sample(n=muestra, random_state=seed)
+        print(f"Se grafica una muestra aleatoria de {muestra} distritos sobre {len(df)}.")
+
+    formas = ["o", "s", "D", "^", "P", "X", "v", "*", "p", "<"]
+    marcadores = [formas[i % len(formas)] for i in range(k)]
+
+    sns.set_theme(style="ticks")
+    pair_plot = sns.pairplot(graficar, hue="cluster", hue_order=nombres_grupos,
+                             diag_kind=diag_kind, markers=marcadores, palette=palette,
+                             height=figsize[0] / len(features),
+                             plot_kws=dict(s=18, alpha=0.6, linewidth=0))
+
+    pair_plot.figure.set_size_inches(figsize)
+    pair_plot.legend.set_title("Grupo")
+
+    plt.suptitle(f"California housing agrupado con K-means (k = {k})", y=1.02)
+    plt.show()
+
+    if return_data:
+        centroides = pd.DataFrame(kmeans.cluster_centers_[orden], columns=features_cluster,
+                                  index=[f"Grupo {i + 1}" for i in range(k)])
+        return {"etiquetas": etiquetas + 1, "tamanos": tamanos, "centroides": centroides,
+                "modelo": kmeans, "datos": df}
+
+
+def histogramasHousing(columnas=None, bins=50, figsize=(12, 8), color="#fab700",
+                       usar_ratios=False, titulo="Histogramas de las características de las casas",
+                       mostrar_rangos=False):
+    """Histogramas de todas las variables numéricas de California housing.
+
+    Versión autocontenida de plot_histograms(): carga los datos por su cuenta y completa los
+    207 faltantes de `total_bedrooms` con la mediana, de modo que las distribuciones coinciden
+    con las que ven las funciones de clustering.
+
+    Parámetros
+    ----------
+    columnas : list o None
+        Variables a graficar. Si es None se usan todas las numéricas del conjunto.
+    bins : int
+        Cantidad de barras de cada histograma.
+    figsize : tuple
+        Tamaño de la figura.
+    color : str
+        Color de las barras.
+    usar_ratios : bool
+        Si True agrega `hab_por_hogar`, `dorm_por_hab` y `pers_por_hogar`.
+    titulo : str
+        Título de la figura; con "" se omite.
+    mostrar_rangos : bool
+        Si True imprime mínimo, máximo, media, mediana y desvío de cada variable.
+    """
+    df, _, faltantes = _prepararDatosHousing(usar_ratios)
+    df = df.drop(columns=["ocean_proximity"])
+
+    if columnas is not None:
+        invalidas = [c for c in columnas if c not in df.columns]
+        if invalidas:
+            raise ValueError(f"Columnas inexistentes: {invalidas}. Disponibles: {list(df.columns)}")
+        df = df[list(columnas)]
+
+    if mostrar_rangos:
+        rangos = df.agg(["min", "max", "mean", "median", "std"]).T
+        rangos.columns = ["mínimo", "máximo", "media", "mediana", "desvío"]
+        print(rangos.round(2).to_string())
+        print()
+
+    df.hist(bins=bins, figsize=figsize, color=color)
+    if titulo:
+        plt.suptitle(titulo, fontsize=12)
+    plt.tight_layout()
+    plt.show()
+
+
+def mapaHousingKmeans(k=3, features_cluster=None, figsize=(10, 7), seed=42, escalar=True,
+                      usar_ratios=False, palette="Set1", divisor_poblacion=100, alpha=0.6,
+                      titulo=None, mostrar_tamanos=True, muestra=None, return_data=False):
+    """Mapa de California con cada distrito coloreado según el grupo que le asigna K-means.
+
+    El tamaño de cada punto es proporcional a la población del distrito, igual que en
+    makeBetterScatterHousing(), pero el color ya no es el precio sino el resultado del
+    agrupamiento.
+
+    Conviene remarcarlo en clase: `longitude` y `latitude` NO participan del agrupamiento. Si
+    los grupos igual dibujan regiones reconocibles en el mapa, eso es un hallazgo —significa que
+    las variables socioeconómicas y de vivienda tienen estructura geográfica— y no algo que el
+    modelo haya recibido de entrada.
+
+    Parámetros
+    ----------
+    k : int
+        Cantidad de grupos. Mínimo 2 y máximo 9 (colores distinguibles).
+    features_cluster : list o None
+        Variables con las que se agrupa. Si es None se usan las mismas que
+        interpretarClustersHousing() y pairPlotofHousingKmeans(): con igual k y semilla, el
+        Grupo i es el mismo en las tres funciones.
+    figsize : tuple
+        Tamaño de la figura.
+    seed : int
+        Semilla de K-means y del muestreo.
+    escalar : bool
+        Si True (recomendado) estandariza antes de agrupar.
+    usar_ratios : bool
+        Si True agrega los ratios por hogar a las variables elegibles.
+    palette : str
+        Paleta de seaborn. Con "Set1" los colores coinciden con los de pairPlotofHousingKmeans().
+    divisor_poblacion : int
+        La población se divide por este número para obtener el tamaño del punto.
+    alpha : float
+        Transparencia de los puntos.
+    titulo : str o None
+        Título de la figura; con "" se omite.
+    muestra : int o None
+        Si se indica, grafica sólo esa cantidad de distritos. K-means siempre usa los 20.640.
+    return_data : bool
+        Si True devuelve un diccionario con etiquetas, tamaños, precios medios y el modelo.
+    """
+    df, columnas_cluster, _ = _prepararDatosHousing(usar_ratios)
+
+    if features_cluster is None:
+        features_cluster = list(columnas_cluster)
+    invalidas = [c for c in features_cluster if c not in df.columns]
+    if invalidas:
+        raise ValueError(f"Columnas inexistentes: {invalidas}. Disponibles: {list(df.columns)}")
+
+    if isinstance(k, bool) or not isinstance(k, (int, np.integer)):
+        raise ValueError("k debe ser un número entero.")
+    if k < 2 or k > 9:
+        raise ValueError(f"k debe estar entre 2 y 9. Se recibió k={k}.")
+
+    ##K-means se ajusta sobre el conjunto completo; las coordenadas no entran al modelo
+    X = df[features_cluster]
+    X_modelo = StandardScaler().fit_transform(X) if escalar else X.to_numpy(dtype=float)
+
+    kmeans = KMeans(n_clusters=k, n_init=20, random_state=seed)
+    etiquetas = kmeans.fit_predict(X_modelo)
+    tamanos = np.bincount(etiquetas, minlength=k)
+
+    ##renumeramos de mayor a menor tamaño: el grupo 1 es siempre el más numeroso
+    orden = np.argsort(-tamanos)
+    remapeo = np.empty(k, dtype=int)
+    remapeo[orden] = np.arange(k)
+    etiquetas = remapeo[etiquetas]
+    tamanos = tamanos[orden]
+    df["cluster"] = etiquetas
+
+    precios = pd.Series([df.loc[etiquetas == i, "median_house_value"].mean() for i in range(k)],
+                        index=[f"Grupo {i + 1}" for i in range(k)])
+
+    print(f"K-means con k={k} sobre {len(df)} distritos"
+          f"{' (variables estandarizadas)' if escalar else ' (sin estandarizar)'}")
+    print(f"Variables usadas para agrupar: {', '.join(features_cluster)}")
+    print("longitude y latitude NO se usan para agrupar: el mapa es una validación externa.")
+    if mostrar_tamanos:
+        for i in range(k):
+            print(f"  Grupo {i + 1}: {tamanos[i]} distritos ({100 * tamanos[i] / len(df):.1f}%)"
+                  f" | precio medio US$ {precios.iloc[i]:,.0f}")
+
+    graficar = df
+    if muestra is not None and muestra < len(df):
+        graficar = df.sample(n=muestra, random_state=seed)
+        print(f"Se grafican {muestra} distritos sobre {len(df)}.")
+
+    colores = sns.color_palette(palette, k)
+
+    fig, ax = plt.subplots(figsize=figsize)
+    for i in range(k):
+        grupo = graficar[graficar["cluster"] == i]
+        ax.scatter(grupo["longitude"], grupo["latitude"],
+                   s=grupo["population"] / divisor_poblacion,
+                   color=colores[i], alpha=alpha, linewidths=0, zorder=2)
+
+    ##el mapa de fondo se dibuja al final, por debajo de los puntos
+    limites = (-124.55, -113.95, 32.45, 42.05)
+    try:
+        california_img = plt.imread("cdan/imagenes/california.png")
+    except FileNotFoundError:
+        california_img = plt.imread("imagenes//california.png")
+    ax.imshow(california_img, extent=limites, zorder=0)
+    ax.axis(limites)
+
+    ##marcadores de tamaño fijo para que la leyenda sea legible
+    referencias = [plt.Line2D([], [], marker="o", linestyle="", markersize=8, color=colores[i],
+                              label=f"Grupo {i + 1} (n={tamanos[i]})") for i in range(k)]
+    ax.legend(handles=referencias, title="Grupo", loc="upper right", fontsize=9)
+
+    ax.set_xlabel("Longitud", fontsize=10)
+    ax.set_ylabel("Latitud", fontsize=10)
+    if titulo is None:
+        titulo = f"Distritos de California según el grupo de K-means (k = {k})"
+    if titulo:
+        ax.set_title(titulo, fontsize=12)
+    ax.grid(alpha=0.3, zorder=1)
+
+    plt.tight_layout()
+    plt.show()
+
+    if return_data:
+        centroides = pd.DataFrame(kmeans.cluster_centers_[orden], columns=features_cluster,
+                                  index=[f"Grupo {i + 1}" for i in range(k)])
+        return {"etiquetas": etiquetas + 1, "tamanos": tamanos, "precios": precios,
+                "centroides": centroides, "modelo": kmeans, "datos": df}
+
+# histogramasHousing()
+# mapaHousingKmeans(k=3)
+##el tamaño del punto es la población; el color, el grupo. Como las coordenadas no entran al
+##modelo, la estructura geográfica que aparezca es un resultado y no un supuesto.
 
 def classifyWineFeatures(feature1, feature2, seed = 0, cmap = "plasma", test_size=0.4, figsize=(8,5)):
     if not feature1 or not feature2:
@@ -1272,3 +1648,617 @@ def processSegmenDataset_v2(apply_pca = False, n_components_pca = 2, return_data
 # loadSegmentedData_v2()
 # basicAnalysisSegmentedDataset_v2()
 # processSegmenDataset_v2(apply_pca = True, n_components_pca = 2)
+
+##--------------------------------------------------------------------------------------
+## Interpretando los clusters: réplica de la Figure 7-6 de
+## "Practical Statistics for Data Scientists" (apartado Interpreting the Clusters)
+##
+## _graficarMediasClusters() es el núcleo común; las funciones interpretarClusters*()
+## sólo preparan el set de datos correspondiente y delegan el gráfico.
+##--------------------------------------------------------------------------------------
+
+_WINE_NOMBRES_CORTOS = {
+    "alcohol": "alcohol",
+    "malic_acid": "ac_malico",
+    "ash": "ceniza",
+    "alcalinity_of_ash": "alcal_ceniza",
+    "magnesium": "magnesio",
+    "total_phenols": "fenoles_tot",
+    "flavanoids": "flavonoides",
+    "nonflavanoid_phenols": "fen_no_flav",
+    "proanthocyanins": "proantocian",
+    "color_intensity": "int_color",
+    "hue": "tono",
+    "od280/od315_of_diluted_wines": "OD280/OD315",
+    "proline": "prolina",
+}
+
+_REAL_ESTATE_NOMBRES_CORTOS = {
+    "X1 transaction date": "fecha_transac",
+    "X2 house age": "antiguedad",
+    "X3 distance to the nearest MRT station": "dist_metro_m",
+    "X4 number of convenience stores": "tiendas_cerca",
+    "price of unit area": "precio_area",
+}
+
+_HOUSING_NOMBRES_CORTOS = {
+    "housing_median_age": "antig_mediana",
+    "total_rooms": "habitaciones",
+    "total_bedrooms": "dormitorios",
+    "population": "poblacion",
+    "households": "hogares",
+    "median_income": "ingreso_mediano",
+    "median_house_value": "precio_mediano",
+    "hab_por_hogar": "hab_por_hogar",
+    "dorm_por_hab": "dorm_por_hab",
+    "pers_por_hogar": "pers_por_hogar",
+}
+
+
+def _cargarCSVDatos(nombre):
+    """Lee un csv de la carpeta datos/ tanto en Colab como en el entorno local."""
+    try:
+        return pd.read_csv(f"cdan//datos//{nombre}", encoding="utf-8")
+    except FileNotFoundError:
+        return pd.read_csv(f"datos//{nombre}", encoding="utf-8")
+
+
+def _prepararDatosHousing(usar_ratios=False):
+    """Carga housing.csv y devuelve el DataFrame junto con las variables de agrupamiento.
+
+    Centraliza el preprocesamiento para que todas las funciones de housing partan exactamente
+    de los mismos datos y de la misma lista de variables. Eso es lo que permite que, con la
+    misma semilla y el mismo k, interpretarClustersHousing() y pairPlotofHousingKmeans()
+    produzcan el mismo agrupamiento.
+
+    Se descartan `longitude`, `latitude` (coordenadas), `ocean_proximity` (categórica) y
+    `median_house_value` (el precio se reserva como resultado a interpretar, no como insumo).
+
+    Devuelve
+    --------
+    (df, columnas_cluster, faltantes)
+    """
+    df = _cargarCSVDatos("housing.csv").copy()
+    faltantes = int(df["total_bedrooms"].isna().sum())
+    df["total_bedrooms"] = df["total_bedrooms"].fillna(df["total_bedrooms"].median())
+
+    if usar_ratios:
+        df["hab_por_hogar"] = df["total_rooms"] / df["households"]
+        df["dorm_por_hab"] = df["total_bedrooms"] / df["total_rooms"]
+        df["pers_por_hogar"] = df["population"] / df["households"]
+
+    fuera = ["longitude", "latitude", "ocean_proximity", "median_house_value"]
+    columnas_cluster = [c for c in df.columns if c not in fuera]
+    return df, columnas_cluster, faltantes
+
+
+def _graficarMediasClusters(X_df, k, nombres_cortos=None, anotacion=None,
+                            anotacion_titulo="Precio medio", anotacion_formato="{:,.1f}",
+                            titulo=None, titulo_defecto="", etiqueta_observaciones="casos",
+                            figsize=None, escalar=True, seed=42, escala_y="libre",
+                            ordenar_variables=False, usar_nombres_cortos=True,
+                            ordenar_clusters=True, mostrar_tamanos=True, resumen=True,
+                            n_destacadas=3, color_pos="#00BFC4", color_neg="#F8766D",
+                            estilo_ggplot=True, k_max=None, return_data=False):
+    """Núcleo del gráfico de medias por cluster (Figure 7-6).
+
+    Ajusta K-means sobre X_df y dibuja un panel por cluster con el valor del centroide en
+    cada variable. Si se pasa `anotacion` (una serie numérica alineada con X_df, típicamente
+    el precio), agrega en cada panel un recuadro con el promedio de esa serie en el cluster.
+
+    Parámetros
+    ----------
+    X_df : DataFrame
+        Variables con las que se arman los clusters (ya sin columnas descartadas).
+    k : int
+        Cantidad de clusters. Mínimo 1 y máximo `k_max` (por defecto, la cantidad de variables).
+    nombres_cortos : dict o None
+        Diccionario de renombres para el eje x.
+    anotacion : Series o None
+        Serie numérica para el recuadro de cada panel (no participa del clustering).
+    anotacion_titulo, anotacion_formato : str
+        Texto y formato del recuadro, por ejemplo "Precio medio" y "US$ {:,.0f}".
+    titulo, titulo_defecto : str
+        Título de la figura; con "" se omite.
+    etiqueta_observaciones : str
+        Cómo se llaman las observaciones en el resumen impreso ("vinos", "viviendas", ...).
+    k_max : int o None
+        Tope de clusters permitido. Si es None se usa la cantidad de variables de X_df.
+    """
+    n_features = X_df.shape[1]
+    tope = n_features if k_max is None else int(k_max)
+
+    if isinstance(k, bool) or not isinstance(k, (int, np.integer)):
+        raise ValueError("k debe ser un número entero.")
+    if k < 1 or k > tope:
+        raise ValueError(f"k debe estar entre 1 y {tope}. Se recibió k={k}.")
+    if escala_y not in ("libre", "compartida"):
+        raise ValueError('escala_y debe ser "libre" o "compartida".')
+
+    X_df = X_df.reset_index(drop=True)
+    if anotacion is not None:
+        anotacion = pd.Series(np.asarray(anotacion, dtype=float))
+        if len(anotacion) != len(X_df):
+            raise ValueError("La anotación debe tener la misma cantidad de filas que los datos.")
+
+    ##el modelo trabaja con distancias, por lo que las variables deben estar en la misma escala
+    X_modelo = StandardScaler().fit_transform(X_df) if escalar else X_df.to_numpy(dtype=float)
+
+    kmeans = KMeans(n_clusters=k, n_init=20, random_state=seed)
+    etiquetas = kmeans.fit_predict(X_modelo)
+    centros = kmeans.cluster_centers_
+    tamanos = np.bincount(etiquetas, minlength=k)
+
+    ##renumeramos de mayor a menor tamaño para que la lectura sea estable entre corridas
+    if ordenar_clusters:
+        orden = np.argsort(-tamanos)
+        centros = centros[orden]
+        tamanos = tamanos[orden]
+        remapeo = np.empty(k, dtype=int)
+        remapeo[orden] = np.arange(k)
+        etiquetas = remapeo[etiquetas]
+
+    columnas = list(X_df.columns)
+    if usar_nombres_cortos and nombres_cortos:
+        columnas = [nombres_cortos.get(c, c) for c in columnas]
+    centroides = pd.DataFrame(centros, columns=columnas,
+                              index=[f"Cluster {i + 1}" for i in range(k)])
+    if ordenar_variables:
+        centroides = centroides[sorted(centroides.columns)]
+
+    ##promedio de la variable anotada dentro de cada cluster (no interviene en el modelo)
+    promedios_anotacion = None
+    if anotacion is not None:
+        promedios_anotacion = pd.Series(
+            [anotacion[etiquetas == i].mean() for i in range(k)],
+            index=centroides.index, name=anotacion_titulo)
+
+    if figsize is None:
+        figsize = (11, max(2.6, 1.45 * k) + 1.2)
+
+    fig, axes = plt.subplots(k, 1, figsize=figsize, sharex=True)
+    axes = np.atleast_1d(axes)
+
+    posiciones = np.arange(centroides.shape[1])
+    max_abs = 1.05 * np.abs(centroides.to_numpy()).max()
+    ##si hay recuadro necesitamos aire arriba para que no tape las barras
+    holgura = 1.60 if anotacion is not None else 1.10
+
+    for i, ax in enumerate(axes):
+        valores = centroides.iloc[i].to_numpy()
+        colores = [color_pos if v > 0 else color_neg for v in valores]
+        ax.bar(posiciones, valores, color=colores, width=0.75)
+        ax.axhline(0, color="#888888", linewidth=0.8)
+
+        if escala_y == "compartida":
+            ax.set_ylim(-max_abs, max_abs * (holgura / 1.10))
+        else:
+            ##replicamos el facet_grid de escala libre: cada panel se ajusta a su propio rango
+            limite = np.abs(valores).max()
+            limite = limite if limite > 0 else 1.0
+            inferior = -1.10 * limite if valores.min() < 0 else -0.05 * limite
+            superior = holgura * limite if valores.max() > 0 else 0.05 * limite
+            ax.set_ylim(inferior, superior)
+
+        if estilo_ggplot:
+            ax.set_facecolor("#EBEBEB")
+            ax.grid(axis="y", color="white", linewidth=0.8)
+            ax.set_axisbelow(True)
+            for lado in ax.spines.values():
+                lado.set_visible(False)
+            ax.tick_params(length=0)
+
+        etiqueta = f"Cluster {i + 1}"
+        if mostrar_tamanos:
+            etiqueta += f"\n(n={tamanos[i]}; {100 * tamanos[i] / len(etiquetas):.0f}%)"
+        ax.text(1.015, 0.5, etiqueta, transform=ax.transAxes, rotation=270,
+                ha="left", va="center", fontsize=13,
+                bbox=dict(facecolor="#D9D9D9", edgecolor="#BFBFBF", pad=4))
+
+        if promedios_anotacion is not None:
+            texto = f"{anotacion_titulo}: {anotacion_formato.format(promedios_anotacion.iloc[i])}"
+            ax.text(0.012, 0.95, texto, transform=ax.transAxes, ha="left", va="top",
+                    fontsize=9, color="#333333",
+                    bbox=dict(facecolor="white", edgecolor="#BFBFBF", alpha=0.9, pad=3))
+
+    axes[-1].set_xticks(posiciones)
+    axes[-1].set_xticklabels(centroides.columns, rotation=90)
+    axes[-1].set_xlim(-0.8, len(posiciones) - 0.2)
+
+    etiqueta_y = "Media del cluster (unidades estandarizadas)" if escalar else "Media del cluster (unidades originales)"
+    fig.supylabel(etiqueta_y, fontsize=12)
+    if titulo is None:
+        titulo = titulo_defecto.format(k=k)
+    if titulo:
+        fig.suptitle(titulo, fontsize=13)
+
+    fig.tight_layout(rect=[0.02, 0, 0.93, 0.98 if titulo else 1])
+    plt.show()
+
+    if resumen:
+        print(f"INTERPRETACIÓN DE LOS {k} CLUSTERS (K-means)")
+        for i in range(k):
+            valores = centroides.iloc[i].sort_values()
+            ##separamos por signo para que una misma variable no aparezca en las dos listas
+            altas = valores[valores > 0].sort_values(ascending=False).head(n_destacadas)
+            bajas = valores[valores < 0].head(n_destacadas)
+            linea = f"\nCluster {i + 1} | {tamanos[i]} {etiqueta_observaciones} ({100 * tamanos[i] / len(etiquetas):.1f}%)"
+            if promedios_anotacion is not None:
+                linea += f" | {anotacion_titulo}: {anotacion_formato.format(promedios_anotacion.iloc[i])}"
+            print(linea)
+            texto_altas = ", ".join(f"{v} ({valores[v]:+.2f})" for v in altas.index)
+            texto_bajas = ", ".join(f"{v} ({valores[v]:+.2f})" for v in bajas.index)
+            print("  Por encima del promedio: " + (texto_altas if texto_altas else "ninguna"))
+            print("  Por debajo del promedio: " + (texto_bajas if texto_bajas else "ninguna"))
+
+    if return_data:
+        return {"centroides": centroides, "etiquetas": etiquetas, "tamanos": tamanos,
+                "modelo": kmeans, "variables": list(centroides.columns),
+                "anotacion": promedios_anotacion}
+
+
+def interpretarClustersWine(k=3, figsize=None, titulo=None, escalar=True, seed=42,
+                            escala_y="libre", ordenar_variables=False, nombres_cortos=True,
+                            ordenar_clusters=True, mostrar_tamanos=True, resumen=True,
+                            n_destacadas=3, color_pos="#00BFC4", color_neg="#F8766D",
+                            estilo_ggplot=True, return_data=False):
+    """Grafica las medias de las variables en cada cluster (Figure 7-6) para el dataset wine.
+
+    Cada panel corresponde a un cluster y muestra el valor de su centroide en cada variable.
+    Las barras hacia arriba (color_pos) indican variables por encima del promedio global y las
+    barras hacia abajo (color_neg) variables por debajo. Con los datos estandarizados, la altura
+    de cada barra se lee directamente en desvíos estándar respecto del promedio del dataset.
+
+    Parámetros
+    ----------
+    k : int
+        Cantidad de clusters. Mínimo 1 y máximo la cantidad de variables del dataset (13 en wine).
+    figsize : tuple o None
+        Tamaño de la figura. Si es None se calcula en función de k.
+    titulo : str o None
+        Título de la figura. Si es None se arma uno por defecto; con "" se omite.
+    escalar : bool
+        Si True (recomendado) estandariza las variables antes de aplicar K-means.
+    seed : int
+        Semilla de K-means (random_state).
+    escala_y : {"libre", "compartida"}
+        "libre" usa una escala por panel (como el facet_grid del libro); "compartida" usa los
+        mismos límites simétricos en todos los paneles, lo que facilita comparar magnitudes.
+    ordenar_variables : bool
+        Si True ordena las variables alfabéticamente en el eje x.
+    nombres_cortos : bool
+        Si True usa nombres abreviados para las variables de wine.
+    ordenar_clusters : bool
+        Si True renumera los clusters de mayor a menor tamaño (Cluster 1 = el más grande).
+    mostrar_tamanos : bool
+        Si True agrega la cantidad de vinos de cada cluster en la etiqueta lateral.
+    resumen : bool
+        Si True imprime, por cluster, las variables más altas y más bajas.
+    n_destacadas : int
+        Cantidad de variables a destacar por cluster en el resumen impreso.
+    color_pos, color_neg : str
+        Colores de las barras positivas y negativas.
+    estilo_ggplot : bool
+        Si True imita el fondo gris con grilla blanca de la figura original.
+    return_data : bool
+        Si True devuelve un diccionario con centroides, etiquetas, tamaños y el modelo.
+    """
+    wine = load_wine()
+    X_df = pd.DataFrame(wine.data, columns=list(wine.feature_names))
+
+    return _graficarMediasClusters(
+        X_df, k, nombres_cortos=_WINE_NOMBRES_CORTOS,
+        titulo=titulo, titulo_defecto="Medias de las variables en cada cluster (K = {k}) - dataset wine",
+        etiqueta_observaciones="vinos", figsize=figsize, escalar=escalar, seed=seed,
+        escala_y=escala_y, ordenar_variables=ordenar_variables, usar_nombres_cortos=nombres_cortos,
+        ordenar_clusters=ordenar_clusters, mostrar_tamanos=mostrar_tamanos, resumen=resumen,
+        n_destacadas=n_destacadas, color_pos=color_pos, color_neg=color_neg,
+        estilo_ggplot=estilo_ggplot, return_data=return_data)
+
+
+def compararClasesVsClustersWine(k=3, figsize=None, titulo=None, seed=42, escala_y="compartida",
+                                 ordenar_variables=False, nombres_cortos=True, resumen=True,
+                                 color_pos="#00BFC4", color_neg="#F8766D", estilo_ggplot=True,
+                                 mostrar_matriz=True, return_data=False):
+    """Compara el perfil promedio de las clases reales de wine contra el de los clusters de K-means.
+
+    A la izquierda, el promedio estandarizado de cada variable para las tres cepas reales del
+    conjunto (columna `target`); a la derecha, el promedio de cada grupo que encuentra K-means.
+    Si el agrupamiento recupera la estructura de las clases, cada fila debe verse casi igual de
+    los dos lados.
+
+    Los números de cluster de K-means son arbitrarios, así que antes de graficar se emparejan con
+    las clases reales mediante el algoritmo húngaro (`linear_sum_assignment`), maximizando las
+    coincidencias. Ese emparejamiento es sólo para poder comparar fila por fila: no cambia el
+    agrupamiento ni las métricas.
+
+    Parámetros
+    ----------
+    k : int
+        Cantidad de clusters de K-means. Con k=3 hay una fila por clase. Si k es mayor, los
+        clusters que sobran se grafican en filas con el panel izquierdo vacío.
+    figsize : tuple o None
+        Tamaño de la figura. Si es None se calcula en función de la cantidad de filas.
+    titulo : str o None
+        Título de la figura; con "" se omite.
+    seed : int
+        Semilla de K-means (random_state).
+    escala_y : {"compartida", "libre"}
+        "compartida" (recomendada acá) usa los mismos límites en todos los paneles, que es lo
+        que permite comparar visualmente izquierda contra derecha.
+    resumen : bool
+        Si True imprime las métricas de coincidencia entre clases y clusters.
+    mostrar_matriz : bool
+        Si True imprime la matriz de contingencia clases reales vs clusters.
+    return_data : bool
+        Si True devuelve un diccionario con los perfiles, el emparejamiento y las métricas.
+
+    El resto de los parámetros funciona igual que en interpretarClustersWine().
+    """
+    if isinstance(k, bool) or not isinstance(k, (int, np.integer)):
+        raise ValueError("k debe ser un número entero.")
+    if escala_y not in ("libre", "compartida"):
+        raise ValueError('escala_y debe ser "libre" o "compartida".')
+
+    wine = load_wine()
+    nombres = list(wine.feature_names)
+    y = wine.target
+    n_clases = len(np.unique(y))
+
+    if k < 1 or k > len(nombres):
+        raise ValueError(f"k debe estar entre 1 y {len(nombres)}. Se recibió k={k}.")
+
+    ##ambos perfiles se calculan sobre los mismos datos estandarizados, así son comparables
+    X_esc = StandardScaler().fit_transform(wine.data)
+    datos = pd.DataFrame(X_esc, columns=nombres)
+
+    kmeans = KMeans(n_clusters=k, n_init=20, random_state=seed)
+    etiquetas = kmeans.fit_predict(X_esc)
+
+    ##matriz de contingencia y emparejamiento óptimo clase <-> cluster (algoritmo húngaro)
+    contingencia = np.zeros((n_clases, k), dtype=int)
+    for clase, grupo in zip(y, etiquetas):
+        contingencia[clase, grupo] += 1
+    filas_ind, cols_ind = linear_sum_assignment(-contingencia)
+    emparejamiento = dict(zip(filas_ind, cols_ind))
+
+    filas = max(n_clases, k)
+    sobrantes = [c for c in range(k) if c not in set(cols_ind)]
+    orden_clusters = []
+    for i in range(filas):
+        if i in emparejamiento:
+            orden_clusters.append(emparejamiento[i])
+        elif sobrantes:
+            orden_clusters.append(sobrantes.pop(0))
+        else:
+            orden_clusters.append(None)
+
+    coincidencias = int(sum(contingencia[i, emparejamiento[i]] for i in emparejamiento))
+    proporcion = coincidencias / len(y)
+    ari = adjusted_rand_score(y, etiquetas)
+
+    perfil_clases = datos.groupby(y).mean()
+    perfil_clusters = datos.groupby(etiquetas).mean()
+
+    columnas = [_WINE_NOMBRES_CORTOS.get(c, c) for c in nombres] if nombres_cortos else nombres
+    perfil_clases.columns = columnas
+    perfil_clusters.columns = columnas
+    if ordenar_variables:
+        perfil_clases = perfil_clases[sorted(columnas)]
+        perfil_clusters = perfil_clusters[sorted(columnas)]
+
+    if figsize is None:
+        ##si la columna izquierda termina antes, sus etiquetas del eje x caen en una fila
+        ##intermedia y necesitan alto propio para no comprimir el resto de los paneles
+        alto_extra = 1.6 if k > n_clases else 0
+        figsize = (13, max(2.6, 1.45 * filas) + 1.4 + alto_extra)
+
+    fig, axes = plt.subplots(filas, 2, figsize=figsize, sharex=True,
+                             sharey=(escala_y == "compartida"), squeeze=False)
+
+    posiciones = np.arange(perfil_clases.shape[1])
+    max_abs = 1.10 * max(np.abs(perfil_clases.to_numpy()).max(),
+                         np.abs(perfil_clusters.to_numpy()).max())
+
+    def _dibujar(ax, valores, titulo_panel):
+        colores = [color_pos if v > 0 else color_neg for v in valores]
+        ax.bar(posiciones, valores, color=colores, width=0.75)
+        ax.axhline(0, color="#888888", linewidth=0.8)
+        if escala_y == "compartida":
+            ax.set_ylim(-max_abs, max_abs)
+        ax.set_title(titulo_panel, fontsize=9, loc="left")
+        if estilo_ggplot:
+            ax.set_facecolor("#EBEBEB")
+            ax.grid(axis="y", color="white", linewidth=0.8)
+            ax.set_axisbelow(True)
+            for lado in ax.spines.values():
+                lado.set_visible(False)
+            ax.tick_params(length=0)
+
+    for i in range(filas):
+        ##columna izquierda: promedio de la clase real
+        if i < n_clases:
+            _dibujar(axes[i][0], perfil_clases.iloc[i].to_numpy(),
+                     f"Clase {i} (n={int((y == i).sum())})")
+        else:
+            axes[i][0].axis("off")
+
+        ##columna derecha: promedio del cluster emparejado con esa clase
+        grupo = orden_clusters[i]
+        if grupo is not None:
+            _dibujar(axes[i][1], perfil_clusters.loc[grupo].to_numpy(),
+                     f"Cluster {grupo} (n={int((etiquetas == grupo).sum())})")
+        else:
+            axes[i][1].axis("off")
+
+    for columna in (0, 1):
+        ejes_visibles = [axes[i][columna] for i in range(filas) if axes[i][columna].axison]
+        if ejes_visibles:
+            ultimo = ejes_visibles[-1]
+            ##sharex oculta las etiquetas fuera de la última fila: las reponemos en cada columna
+            ultimo.tick_params(labelbottom=True)
+            ultimo.set_xticks(posiciones)
+            ultimo.set_xticklabels(perfil_clases.columns, rotation=90)
+            ultimo.set_xlim(-0.8, len(posiciones) - 0.2)
+
+    axes[0][0].annotate("Etiquetas reales", xy=(0.5, 1.35), xycoords="axes fraction",
+                        ha="center", va="bottom", fontsize=12, fontweight="bold")
+    axes[0][1].annotate(f"K-means (k={k})", xy=(0.5, 1.35), xycoords="axes fraction",
+                        ha="center", va="bottom", fontsize=12, fontweight="bold")
+
+    fig.supylabel("Media de la variable (unidades estandarizadas)", fontsize=12)
+    if titulo is None:
+        titulo = (f"Wine: perfil de las clases reales vs. los clusters de K-means "
+                  f"(coincidencia {100 * proporcion:.1f}%)")
+    if titulo:
+        fig.suptitle(titulo, fontsize=13)
+
+    fig.tight_layout(rect=[0.02, 0, 1, 0.94 if titulo else 0.97])
+    plt.show()
+
+    if mostrar_matriz:
+        tabla = pd.DataFrame(contingencia,
+                             index=[f"Clase {i}" for i in range(n_clases)],
+                             columns=[f"Cluster {j}" for j in range(k)])
+        print("MATRIZ DE CONTINGENCIA (filas: clase real, columnas: cluster de K-means)")
+        print(tabla.to_string())
+        print()
+
+    if resumen:
+        print(f"Emparejamiento óptimo clase -> cluster: " +
+              ", ".join(f"Clase {c} -> Cluster {g}" for c, g in sorted(emparejamiento.items())))
+        print(f"Vinos en el cluster que le corresponde a su clase: {coincidencias} de {len(y)} "
+              f"({100 * proporcion:.1f}%)")
+        print(f"Índice de Rand ajustado (ARI): {ari:.3f}")
+        print("El ARI no depende de cómo se numeren los grupos: 0 equivale a un agrupamiento "
+              "al azar y 1 a una coincidencia perfecta.")
+
+    if return_data:
+        return {"perfil_clases": perfil_clases, "perfil_clusters": perfil_clusters,
+                "contingencia": contingencia, "emparejamiento": emparejamiento,
+                "coincidencia": proporcion, "ari": ari, "etiquetas": etiquetas,
+                "modelo": kmeans}
+
+def interpretarClustersRealEstate(k=3, figsize=None, titulo=None, escalar=True, seed=42,
+                                  escala_y="libre", ordenar_variables=False, nombres_cortos=True,
+                                  ordenar_clusters=True, mostrar_tamanos=True, resumen=True,
+                                  n_destacadas=3, color_pos="#00BFC4", color_neg="#F8766D",
+                                  estilo_ggplot=True, incluir_precio=False, k_max=None,
+                                  return_data=False):
+    """Medias de las variables en cada cluster para real_estate.csv (Sindian, Nueva Taipéi).
+
+    Se descartan `No`, `X5 latitude` y `X6 longitude`, de modo que los clusters se arman con la
+    fecha de transacción, la antigüedad de la vivienda, la distancia al metro y la cantidad de
+    tiendas cercanas. El precio no participa del modelo: se usa como validación externa y
+    aparece en el recuadro de cada panel como precio promedio del cluster.
+
+    Parámetros
+    ----------
+    k : int
+        Cantidad de clusters. Mínimo 1 y máximo la cantidad de variables usadas (4 por defecto).
+    incluir_precio : bool
+        Si True suma `price of unit area` a las variables del clustering. Conviene dejarlo en
+        False para poder leer el precio como resultado y no como insumo del agrupamiento.
+    k_max : int o None
+        Permite ampliar el tope de clusters más allá de la cantidad de variables.
+
+    El resto de los parámetros funciona igual que en interpretarClustersWine().
+    """
+    df = _cargarCSVDatos("real_estate.csv")
+    precio = df["price of unit area"]
+
+    fuera = ["No", "X5 latitude", "X6 longitude"]
+    if not incluir_precio:
+        fuera.append("price of unit area")
+    X_df = df.drop(columns=[c for c in fuera if c in df.columns])
+
+    return _graficarMediasClusters(
+        X_df, k, nombres_cortos=_REAL_ESTATE_NOMBRES_CORTOS,
+        anotacion=precio, anotacion_titulo="Precio medio",
+        anotacion_formato="{:,.1f} (NT$ 10k/ping)",
+        titulo=titulo,
+        titulo_defecto="Medias de las variables en cada cluster (K = {k}) - real estate Sindian",
+        etiqueta_observaciones="viviendas", figsize=figsize, escalar=escalar, seed=seed,
+        escala_y=escala_y, ordenar_variables=ordenar_variables, usar_nombres_cortos=nombres_cortos,
+        ordenar_clusters=ordenar_clusters, mostrar_tamanos=mostrar_tamanos, resumen=resumen,
+        n_destacadas=n_destacadas, color_pos=color_pos, color_neg=color_neg,
+        estilo_ggplot=estilo_ggplot, k_max=k_max, return_data=return_data)
+
+
+def interpretarClustersHousing(k=3, features_cluster=None, figsize=None, titulo=None,
+                               escalar=True, seed=42,
+                               escala_y="libre", ordenar_variables=False, nombres_cortos=True,
+                               ordenar_clusters=True, mostrar_tamanos=True, resumen=True,
+                               n_destacadas=3, color_pos="#00BFC4", color_neg="#F8766D",
+                               estilo_ggplot=True, usar_ratios=False, incluir_precio=False,
+                               k_max=None, mostrar_info=True, return_data=False):
+    """Medias de las variables en cada cluster para housing.csv (California Housing).
+
+    Se descartan `longitude`, `latitude` y `ocean_proximity` (categórica). Los 207 faltantes de
+    `total_bedrooms` se completan con la mediana. El valor de la vivienda no participa del
+    modelo: aparece en el recuadro de cada panel como precio promedio del cluster.
+
+    Parámetros
+    ----------
+    k : int
+        Cantidad de clusters. Mínimo 1 y máximo la cantidad de variables usadas
+        (6 por defecto, 9 con usar_ratios=True). Ojo: si se acota `features_cluster`, ese tope
+        baja con él; para superarlo hay que usar `k_max`.
+    features_cluster : list o None
+        Variables con las que se arman los clusters, igual que en mapaHousingKmeans() y
+        pairPlotofHousingKmeans(). Si es None se usan las mismas que esas dos funciones: con
+        igual k y semilla, el Cluster i de acá es el Grupo i de allá.
+        A diferencia de pairPlotofHousingKmeans(), acá no hay un `features` aparte: este
+        gráfico muestra el valor del centroide en cada variable del modelo, así que la lista
+        elegida define a la vez con qué se agrupa y qué se grafica. Para mantener las tres
+        funciones sincronizadas hay que pasarles la misma lista.
+    usar_ratios : bool
+        Si True agrega `hab_por_hogar`, `dorm_por_hab` y `pers_por_hogar`. Los totales del
+        distrito (habitaciones, dormitorios, población, hogares) están muy correlacionados
+        entre sí y hacen que los clusters reflejen sobre todo el tamaño del distrito; los
+        ratios describen mejor cómo son las viviendas.
+    incluir_precio : bool
+        Si True suma `median_house_value` a las variables del clustering.
+    mostrar_info : bool
+        Si True informa el preprocesamiento aplicado antes de graficar.
+
+    El resto de los parámetros funciona igual que en interpretarClustersWine().
+    """
+    df, columnas_cluster, faltantes = _prepararDatosHousing(usar_ratios)
+    precio = df["median_house_value"]
+
+    usa_default = features_cluster is None
+    if usa_default:
+        ##por defecto agrupamos con las mismas variables que mapaHousingKmeans() y
+        ##pairPlotofHousingKmeans(), para que con igual k y semilla las tres funciones
+        ##produzcan exactamente el mismo agrupamiento
+        features_cluster = list(columnas_cluster)
+
+    ##ocean_proximity es categórica: no entra en un modelo basado en distancias
+    columnas_validas = [c for c in df.columns if c != "ocean_proximity"]
+    invalidas = [c for c in features_cluster if c not in columnas_validas]
+    if invalidas:
+        raise ValueError(f"Columnas inexistentes: {sorted(set(invalidas))}. "
+                         f"Disponibles: {columnas_validas}")
+
+    columnas = list(features_cluster)
+    if incluir_precio and "median_house_value" not in columnas:
+        columnas.append("median_house_value")
+    X_df = df[columnas]
+
+    if mostrar_info:
+        descarte = "se descartan longitude, latitude y ocean_proximity | " if usa_default else ""
+        print(f"housing.csv: {len(df)} distritos | {descarte}"
+              f"{faltantes} faltantes de total_bedrooms completados con la mediana")
+        print(f"Variables usadas para el clustering: {', '.join(X_df.columns)}\n")
+
+    return _graficarMediasClusters(
+        X_df, k, nombres_cortos=_HOUSING_NOMBRES_CORTOS,
+        anotacion=precio, anotacion_titulo="Precio medio", anotacion_formato="US$ {:,.0f}",
+        titulo=titulo,
+        titulo_defecto="Medias de las variables en cada cluster (K = {k}) - California housing",
+        etiqueta_observaciones="distritos", figsize=figsize, escalar=escalar, seed=seed,
+        escala_y=escala_y, ordenar_variables=ordenar_variables, usar_nombres_cortos=nombres_cortos,
+        ordenar_clusters=ordenar_clusters, mostrar_tamanos=mostrar_tamanos, resumen=resumen,
+        n_destacadas=n_destacadas, color_pos=color_pos, color_neg=color_neg,
+        estilo_ggplot=estilo_ggplot, k_max=k_max, return_data=return_data)
